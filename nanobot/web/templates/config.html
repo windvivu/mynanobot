@@ -1,0 +1,2403 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration — Nanobot OS{% endblock %}
+
+{% block content %}
+<!-- Sidebar -->
+<aside class="w-full lg:w-72 flex flex-col gap-6">
+    <div class="matrix-card p-6 flex flex-col items-center text-center gap-4">
+        <div
+            class="w-20 h-20 flex items-center justify-center text-primary glow-text border-2 border-primary/30 rounded-full relative">
+            <div class="absolute inset-0 border border-primary animate-pulse rounded-full opacity-20"></div>
+            <span class="material-symbols-outlined text-4xl">settings</span>
+        </div>
+        <div>
+            <h2 class="text-lg font-bold glow-text tracking-widest uppercase">Config_Editor</h2>
+            <p class="text-[10px] text-primary/50 font-mono">MODIFY SYSTEM PARAMETERS</p>
+        </div>
+    </div>
+
+    {% set active_page = "config" %}
+
+
+    {% include "_sidebar_nav.html" %}
+</aside>
+
+<!-- Main Content -->
+<div class="flex-1 flex flex-col gap-8">
+
+    <!-- Flash Messages -->
+    {% if saved %}
+    <div id="flashMsg"
+        class="fixed top-6 right-6 z-50 matrix-card border-primary bg-black/95 px-6 py-4 flex items-center gap-4 shadow-[0_0_20px_rgba(0,255,65,0.3)]"
+        style="animation: toastIn 0.3s ease-out;">
+        <span class="material-symbols-outlined text-primary glow-text">check_circle</span>
+        <div>
+            <span class="text-sm font-bold glow-text uppercase tracking-widest">Config Saved Successfully</span>
+            <p class="text-[10px] text-primary/50 mt-1">RESTART GATEWAY TO APPLY RUNTIME CHANGES</p>
+        </div>
+        <button onclick="document.getElementById('flashMsg').style.display='none'"
+            class="ml-4 text-primary/40 hover:text-primary transition-colors">
+            <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="matrix-card border-red-500 bg-red-950/30 px-6 py-4 flex items-center gap-4">
+        <span class="material-symbols-outlined text-red-500 blinking">error</span>
+        <span class="text-sm font-bold text-red-400 uppercase tracking-widest">{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/config" class="flex flex-col gap-8" onsubmit="return confirmSandboxSave()">
+
+        <!-- ============================================================ -->
+        <!-- Section: Neural Core Settings (agents.defaults) -->
+        <!-- ============================================================ -->
+        <div class="matrix-card p-6">
+            <div class="flex items-center justify-between mb-4 border-b border-primary/20 pb-4 cursor-pointer"
+                onclick="toggleSection('neural-body')">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined glow-text">psychology</span>
+                    <h3 class="text-xs font-bold uppercase tracking-widest glow-text">Neural Core Settings</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-primary/30 font-mono">agents.defaults</span>
+                    <span class="material-symbols-outlined text-primary/80 text-sm"
+                        id="neural-body-icon">expand_more</span>
+                </div>
+            </div>
+
+            <div id="neural-body" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="flex flex-col gap-2 md:col-span-2">
+                        <div class="flex items-center gap-3">
+                            <label for="model"
+                                class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                                Model</label>
+                            <button type="button" onclick="testModel()" id="btn-test-model"
+                                class="px-3 py-1 border border-primary/40 text-primary/70 text-[10px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[14px]">bolt</span>
+                                <span>Test</span>
+                            </button>
+                        </div>
+                        <input type="text" id="model" name="model" value="{{ model }}"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                        <!-- Tested models quick-select -->
+                        <div id="model-tested-models" style="display: none;">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-[9px] text-primary/40 uppercase tracking-wider">Tested:</span>
+                                <div class="flex flex-wrap gap-1" id="model-tested-models-list"></div>
+                            </div>
+                        </div>
+                        <!-- Test result -->
+                        <div class="text-[11px] font-mono" id="model-test-result" style="display: none;"></div>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label for="provider"
+                            class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Provider</label>
+                        <select id="provider" name="provider"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm transition-all duration-300 appearance-none cursor-pointer">
+                            {% set provider_options = [
+                                'auto',
+                                'aihubmix', 'anthropic', 'azure_openai',
+                                'byteplus', 'byteplus_coding_plan',
+                                'custom',
+                                'dashscope', 'deepseek',
+                                'gemini', 'github_copilot', 'groq',
+                                'minimax', 'mistral', 'moonshot',
+                                'ollama', 'openai', 'openai_codex', 'openrouter', 'ovms',
+                                'siliconflow',
+                                'vllm',
+                                'volcengine', 'volcengine_coding_plan',
+                                'zhipu'
+                            ] %}
+                            {% for opt in provider_options %}
+                            <option value="{{ opt }}" {{ 'selected' if provider==opt else '' }}
+                                style="background: #0a0a0a; color: #00FF41;">{{ opt }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <label for="temperature"
+                                class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                                Temperature</label>
+                            <button type="button" onclick="document.getElementById('temperature').value='0.1'"
+                                class="text-[8px] text-primary/30 hover:text-primary border border-primary/15 hover:border-primary/50 px-1.5 py-0.5 transition-all"
+                                title="Reset to default">↺ 0.1</button>
+                        </div>
+                        <input type="number" id="temperature" name="temperature" value="{{ temperature }}" step="0.05"
+                            min="0" max="2"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <label for="max_tokens"
+                                class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                                Max_Tokens</label>
+                            <button type="button" onclick="document.getElementById('max_tokens').value='8192'"
+                                class="text-[8px] text-primary/30 hover:text-primary border border-primary/15 hover:border-primary/50 px-1.5 py-0.5 transition-all"
+                                title="Reset to default">↺ 8192</button>
+                        </div>
+                        <input type="number" id="max_tokens" name="max_tokens" value="{{ max_tokens }}" min="1"
+                            max="1000000"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <label for="max_tool_iterations"
+                                class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                                Max_Iterations</label>
+                            <button type="button" onclick="document.getElementById('max_tool_iterations').value='40'"
+                                class="text-[8px] text-primary/30 hover:text-primary border border-primary/15 hover:border-primary/50 px-1.5 py-0.5 transition-all"
+                                title="Reset to default">↺ 40</button>
+                        </div>
+                        <input type="number" id="max_tool_iterations" name="max_tool_iterations"
+                            value="{{ max_tool_iterations }}" min="1" max="200"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <label for="context_window_tokens"
+                                class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                                Context_Window_Tokens</label>
+                            <button type="button" onclick="document.getElementById('context_window_tokens').value='65536'"
+                                class="text-[8px] text-primary/30 hover:text-primary border border-primary/15 hover:border-primary/50 px-1.5 py-0.5 transition-all"
+                                title="Reset to default">↺ 65536</button>
+                        </div>
+                        <input type="number" id="context_window_tokens" name="context_window_tokens" value="{{ context_window_tokens }}"
+                            min="8192" max="2000000"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label for="reasoning_effort"
+                            class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">
+                            &gt; Reasoning_Effort <span class="text-primary/30 normal-case tracking-normal">(optional —
+                                "low", "medium", "high")</span>
+                        </label>
+                        <input type="text" id="reasoning_effort" name="reasoning_effort" value="{{ reasoning_effort }}"
+                            placeholder="default"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Section: Providers -->
+        <!-- ============================================================ -->
+        <div class="matrix-card p-6">
+            <div class="flex items-center justify-between mb-4 border-b border-primary/20 pb-4 cursor-pointer"
+                onclick="toggleSection('providers-body')">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined glow-text">key</span>
+                    <h3 class="text-xs font-bold uppercase tracking-widest glow-text">Provider API Keys</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-primary/30 font-mono">{{ providers | selectattr('has_key') | list |
+                        length }} configured</span>
+                    <span class="material-symbols-outlined text-primary/80 text-sm"
+                        id="providers-body-icon">expand_more</span>
+                </div>
+            </div>
+
+            <div id="providers-body" class="hidden">
+
+                <!-- ── Hidden inputs for form submit (all providers) ── -->
+                {% for p in providers %}
+                <input type="hidden" name="provider_{{ p.name }}_api_key" id="hidden-key-{{ p.name }}" value="{{ p.api_key }}">
+                <input type="hidden" name="provider_{{ p.name }}_api_base" id="hidden-base-{{ p.name }}" value="{{ p.api_base }}">
+                {% endfor %}
+
+                <!-- ── Provider Combobox Picker ── -->
+                <div class="relative mb-4" id="provider-picker-wrap">
+                    <div class="flex items-center gap-2 border border-primary/30 bg-black/60 hover:border-primary/60 transition-colors duration-200">
+                        <span class="material-symbols-outlined text-primary/40 text-[16px] ml-3">search</span>
+                        <input
+                            type="text"
+                            id="provider-search-input"
+                            placeholder="Select or search provider (e.g. openai, anthropic...)"
+                            autocomplete="off"
+                            data-bwignore="true"
+                            data-1p-ignore="true"
+                            data-lpignore="true"
+                            data-form-type="other"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            class="flex-1 bg-transparent outline-none px-2 py-2.5 text-primary font-mono text-xs placeholder-primary/30"
+                            oninput="filterProviderDropdown()"
+                            onfocus="openProviderDropdown()"
+                        >
+                        <span id="provider-selected-dot" class="w-2 h-2 rounded-full bg-primary/20 mr-3 transition-colors duration-300" title="Provider status"></span>
+                    </div>
+                <!-- Dropdown list is created by JS portal (appended to body) -->
+                </div>
+
+
+                <!-- ── Active Provider Card (shown after selection) ── -->
+                <div id="provider-active-card" class="hidden border border-primary/20 p-4 transition-all duration-300" style="animation: none;">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span id="active-provider-dot" class="w-2 h-2 rounded-full bg-primary/20"></span>
+                        <span id="active-provider-name" class="text-[11px] font-bold uppercase tracking-widest text-primary">—</span>
+                        <button type="button" onclick="testProvider(_activeProvider)" id="btn-test-active"
+                            class="ml-auto px-3 py-1 border border-primary/40 text-primary/70 text-[10px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-[14px]">bolt</span>
+                            <span>Test</span>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-bold uppercase tracking-[0.3em] text-primary/70">API Key</label>
+                            <div class="relative">
+                                <input type="password" id="active-provider-key" value=""
+                                    oninput="syncActiveProvider('key')"
+                                    class="w-full bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all duration-300 pr-10">
+                                <button type="button" onclick="toggleReveal(this)"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-primary/30 hover:text-primary transition-colors">
+                                    <span class="material-symbols-outlined text-[16px]">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-bold uppercase tracking-[0.3em] text-primary/70">API Base</label>
+                            <input type="text" id="active-provider-base" value="" placeholder="default"
+                                oninput="syncActiveProvider('base')"
+                                class="w-full bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs placeholder-primary/35 transition-all duration-300">
+                        </div>
+                    </div>
+                    <!-- Test model -->
+                    <div class="mt-2">
+                        <div class="flex items-center gap-2">
+                            <label class="text-[9px] font-bold uppercase tracking-[0.3em] text-primary/50 whitespace-nowrap">Test Model</label>
+                            <input type="text" id="active-provider-model" placeholder="e.g. gpt-4o (leave blank to use Neural Core model)"
+                                oninput="onProviderFieldChange(_activeProvider)"
+                                class="flex-1 bg-black/60 border border-primary/20 focus:border-primary outline-none px-3 py-1.5 text-primary font-mono text-[11px] placeholder-primary/35 transition-all duration-300">
+                        </div>
+                    </div>
+                    <!-- Tested models -->
+                    <div class="mt-2" id="tested-models-active" style="display: none;">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[9px] text-primary/40 uppercase tracking-wider">Tested models:</span>
+                            <div class="flex flex-wrap gap-1" id="tested-models-list-active"></div>
+                        </div>
+                    </div>
+                    <!-- Test result -->
+                    <div class="mt-2 text-[11px] font-mono" id="test-result-active" style="display: none;"></div>
+                    <!-- ── OAuth Panel (Codex / Copilot) ── -->
+                    <div id="oauth-panel" class="hidden mt-3 border-t border-primary/10 pt-3">
+                        <!-- OpenAI Codex section -->
+                        <div id="oauth-codex-section" class="hidden">
+                            <div class="text-[9px] uppercase tracking-[0.3em] text-primary/50 font-bold mb-2">ChatGPT / OpenAI Codex — OAuth Login</div>
+                            <div id="codex-login-area">
+                                <button type="button" onclick="codexStartLogin()"
+                                    class="px-3 py-1.5 border border-primary/40 text-primary/70 text-[10px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[14px]">login</span>
+                                    <span>Generate Login URL</span>
+                                </button>
+                                <div id="codex-url-step" class="hidden mt-2 space-y-2">
+                                    <div class="text-[10px] text-primary/50 font-mono">1. Copy URL bên dưới, mở trong trình duyệt và đăng nhập ChatGPT:</div>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="codex-auth-url" readonly
+                                            class="flex-1 bg-black/60 border border-primary/20 outline-none px-2 py-1 text-primary/70 font-mono text-[10px]">
+                                        <button type="button" onclick="codexCopyUrl()"
+                                            class="px-2 py-1 border border-primary/30 text-primary/50 hover:text-primary hover:border-primary transition-all text-[10px]">Copy</button>
+                                    </div>
+                                    <div class="text-[10px] text-primary/50 font-mono">2. Sau khi đăng nhập, trình duyệt redirect tới <code class="text-primary/70">localhost:1455/auth/callback?code=...</code> — copy toàn bộ URL đó và paste vào đây:</div>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="codex-callback-url" placeholder="localhost:1455/auth/callback?code=..."
+                                            class="flex-1 bg-black/60 border border-primary/20 focus:border-primary outline-none px-2 py-1 text-primary font-mono text-[10px] placeholder-primary/30">
+                                        <button type="button" onclick="codexSubmitCallback()"
+                                            class="px-3 py-1 border border-primary/40 text-primary/70 hover:bg-primary/10 hover:border-primary hover:text-primary transition-all text-[10px] font-bold">✓ Xác nhận</button>
+                                    </div>
+                                    <div id="codex-callback-result" class="text-[10px] font-mono" style="display:none"></div>
+                                </div>
+                            </div>
+                            <div id="codex-logged-area" class="hidden flex items-center gap-3">
+                                <span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_5px_#00FF41]"></span>
+                                <span class="text-[10px] font-mono text-primary/70">Đã đăng nhập <span id="codex-account-id" class="text-primary/50"></span></span>
+                                <button type="button" onclick="codexLogout()"
+                                    class="ml-auto px-2 py-1 border border-red-500/30 text-red-400/60 hover:text-red-400 hover:border-red-500 transition-all text-[9px] font-bold uppercase tracking-wider">Logout</button>
+                            </div>
+                        </div>
+                        <!-- GitHub Copilot section -->
+                        <div id="oauth-copilot-section" class="hidden">
+                            <div class="text-[9px] uppercase tracking-[0.3em] text-primary/50 font-bold mb-2">GitHub Copilot — Device Login</div>
+                            <div id="copilot-login-area">
+                                <button type="button" onclick="copilotStartLogin()"
+                                    class="px-3 py-1.5 border border-primary/40 text-primary/70 text-[10px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[14px]">login</span>
+                                    <span>Login via GitHub Device Flow</span>
+                                </button>
+                                <div id="copilot-device-step" class="hidden mt-2 space-y-2">
+                                    <div class="text-[10px] text-primary/50 font-mono">Vào <a id="copilot-verify-url" href="https://github.com/login/device" target="_blank" class="text-primary underline hover:text-primary/80">github.com/login/device</a> và nhập code:</div>
+                                    <div class="font-mono text-lg tracking-[0.4em] text-primary" id="copilot-user-code">—</div>
+                                    <div class="text-[10px] font-mono text-primary/50" id="copilot-poll-status"></div>
+                                </div>
+                            </div>
+                            <div id="copilot-logged-area" class="hidden flex items-center gap-3">
+                                <span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_5px_#00FF41]"></span>
+                                <span class="text-[10px] font-mono text-primary/70">GitHub Copilot đã xác thực</span>
+                                <button type="button" onclick="copilotLogout()"
+                                    class="ml-auto px-2 py-1 border border-red-500/30 text-red-400/60 hover:text-red-400 hover:border-red-500 transition-all text-[9px] font-bold uppercase tracking-wider">Logout</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hint when no provider selected -->
+                <div id="provider-hint" class="text-center py-4 text-primary/20 text-[11px] font-mono tracking-wider">
+                    ▸ CLICK ABOVE TO SELECT A PROVIDER
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- ============================================================ -->
+        <!-- Section: Tools Configuration -->
+        <!-- ============================================================ -->
+        <div class="matrix-card p-6">
+            <div class="flex items-center justify-between mb-4 border-b border-primary/20 pb-4 cursor-pointer"
+                onclick="toggleSection('tools-body')">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined glow-text">build</span>
+                    <h3 class="text-xs font-bold uppercase tracking-widest glow-text">Tools Configuration</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-primary/30 font-mono">tools.*</span>
+                    <span class="material-symbols-outlined text-primary/80 text-sm"
+                        id="tools-body-icon">expand_more</span>
+                </div>
+            </div>
+
+            <div id="tools-body" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="flex flex-col gap-2">
+                        <label for="exec_timeout"
+                            class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Exec_Timeout</label>
+                        <input type="number" id="exec_timeout" name="exec_timeout" value="{{ exec_timeout }}" min="5"
+                            max="600"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label for="exec_path_append"
+                            class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Exec_Path_Append</label>
+                        <input type="text" id="exec_path_append" name="exec_path_append" value="{{ exec_path_append }}"
+                            placeholder="none"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label for="web_proxy"
+                            class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Web_Proxy</label>
+                        <input type="text" id="web_proxy" name="web_proxy" value="{{ web_proxy }}" placeholder="none"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-3">
+                            <label for="search_api_key"
+                                class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                                Brave_Search_Key</label>
+                            <button type="button" onclick="testBraveKey()"
+                                id="test-brave-btn"
+                                class="px-2 py-0.5 border border-primary/30 text-primary/50 text-[9px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[11px]">verified</span>
+                                <span>Test</span>
+                            </button>
+                            <span id="brave-test-result" class="text-[10px] font-mono" style="display: none;"></span>
+                        </div>
+                        <div class="relative">
+                            <input type="password" id="search_api_key" name="search_api_key"
+                                value="{{ search_api_key }}"
+                                class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300 pr-10" />
+                            <button type="button" onclick="toggleReveal(this)"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-primary/30 hover:text-primary transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Tool Preset -->
+                    <div class="flex flex-col gap-3 md:col-span-2 border-t border-primary/10 pt-4 mt-2">
+                        <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Tool_Preset</span>
+                        <div class="flex flex-wrap gap-2">
+                            {% for preset, label, icon in [
+                                ('developer', 'Developer', 'code'),
+                                ('chatbot', 'Chatbot', 'smart_toy'),
+                                ('custom', 'Custom', 'tune')
+                            ] %}
+                            <label
+                                class="flex items-center gap-2 px-3 py-2 border cursor-pointer transition-all duration-300
+                                       {{ 'border-primary bg-primary/15 text-primary' if tool_preset == preset else 'border-primary/20 text-primary/50 hover:border-primary/50' }}">
+                                <input type="radio" name="tool_preset" value="{{ preset }}"
+                                    {{ 'checked' if tool_preset == preset else '' }}
+                                    class="sr-only" onchange="onToolPresetChange()" />
+                                <span class="material-symbols-outlined text-[14px]">{{ icon }}</span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider">{{ label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <!-- Preset summary (Developer/Chatbot) -->
+                        <div id="preset-summary" class="{{ 'hidden' if tool_preset == 'custom' else '' }}">
+                            <span id="preset-summary-text" class="text-[10px] text-primary/50 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[12px]">info</span>
+                                <span id="preset-summary-content">
+                                    {% if tool_preset == 'chatbot' %}
+                                    Chỉ Message + Web + MCP — File, Exec, Spawn, Cron tắt
+                                    {% else %}
+                                    Tất cả tools bật (File, Exec, Web, Spawn, Cron, MCP)
+                                    {% endif %}
+                                </span>
+                            </span>
+                        </div>
+                        <!-- Custom toggles -->
+                        <div id="preset-custom-toggles" class="{{ '' if tool_preset == 'custom' else 'hidden' }}">
+                            <div class="flex flex-wrap gap-x-6 gap-y-3">
+                                {% for flag, label_text in [
+                                    ('enable_file_tools', 'File Tools'),
+                                    ('enable_web_tools', 'Web Tools'),
+                                    ('enable_spawn', 'Spawn'),
+                                    ('enable_cron', 'Cron'),
+                                    ('enable_mcp', 'MCP Servers')
+                                ] %}
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <div class="relative">
+                                        <input type="checkbox" name="{{ flag }}"
+                                            {% if flag == 'enable_file_tools' and enable_file_tools %}checked{% endif %}
+                                            {% if flag == 'enable_web_tools' and enable_web_tools %}checked{% endif %}
+                                            {% if flag == 'enable_spawn' and enable_spawn %}checked{% endif %}
+                                            {% if flag == 'enable_cron' and enable_cron %}checked{% endif %}
+                                            {% if flag == 'enable_mcp' and enable_mcp %}checked{% endif %}
+                                            class="sr-only peer" />
+                                        <div class="w-10 h-5 bg-black/60 border border-primary/30 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></div>
+                                        <div class="absolute top-[2px] left-[2px] w-4 h-4 bg-primary/30 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-5 transition-all duration-300"></div>
+                                    </div>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-primary/60 peer-checked:text-primary">{{ label_text }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <span class="text-[9px] text-primary/30 mt-1 block">Exec kiểm soát bởi Sandbox bên dưới. Message luôn bật.</span>
+                        </div>
+                    </div>
+                    <!-- Exec Sandbox -->
+                    <div class="flex flex-col gap-3 md:col-span-2 border-t border-primary/10 pt-4 mt-2">
+                        <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Exec_Sandbox</span>
+                        <div class="flex flex-wrap gap-2">
+                            {% for mode, label, icon in [
+                                ('unrestricted', 'Không hạn chế', 'warning'),
+                                ('workspace', 'Sandbox', 'shield'),
+                                ('disabled', 'Tắt exec', 'block')
+                            ] %}
+                            <label
+                                class="flex items-center gap-2 px-3 py-2 border cursor-pointer transition-all duration-300
+                                       {{ 'border-primary bg-primary/15 text-primary' if sandbox_mode == mode else 'border-primary/20 text-primary/50 hover:border-primary/50' }}">
+                                <input type="radio" name="sandbox_mode" value="{{ mode }}"
+                                    {{ 'checked' if sandbox_mode == mode else '' }}
+                                    class="sr-only" onchange="onSandboxModeChange()" />
+                                <span class="material-symbols-outlined text-[14px]">{{ icon }}</span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider">{{ label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <!-- Warning for unrestricted mode -->
+                        <div id="sandbox-warning" class="mt-1 px-3 py-2 border border-red-500/40 bg-red-500/10 {{ '' if sandbox_mode == 'unrestricted' else 'hidden' }}">
+                            <span class="text-[10px] text-red-400 font-bold flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">warning</span>
+                                CHẾ ĐỘ NGUY HIỂM — Bot có thể đọc/ghi/xóa file bất kỳ trên hệ thống
+                            </span>
+                        </div>
+                        <!-- Sandbox settings (shown when mode=workspace) -->
+                        <div id="sandbox-subdir" class="{{ '' if sandbox_mode == 'workspace' else 'hidden' }}">
+                            <div class="flex items-center gap-2 mt-1">
+                                <label for="workspace_subdir"
+                                    class="text-[9px] font-bold uppercase tracking-[0.2em] text-primary/70 whitespace-nowrap">Thư
+                                    mục con:</label>
+                                <input type="text" id="workspace_subdir" name="workspace_subdir"
+                                    value="{{ workspace_subdir }}" placeholder="để trống = sandbox root"
+                                    data-validated=""
+                                    class="flex-1 bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-1.5 text-primary font-mono text-[11px] placeholder-primary/35 transition-all duration-300" />
+                                <button type="button" onclick="checkSubdir()"
+                                    id="btn-check-subdir"
+                                    class="px-2 py-1 border border-primary/40 text-primary/70 text-[9px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1 whitespace-nowrap"
+                                    title="Kiểm tra hợp lệ">
+                                    <span class="material-symbols-outlined text-[11px]">verified</span>
+                                    <span>Kiểm tra</span>
+                                </button>
+                                <span id="subdir-check-result" class="text-[10px] font-mono whitespace-nowrap" style="display:none;"></span>
+                            </div>
+                            <span class="text-[9px] text-primary/30">Ví dụ: "project" → bot chỉ exec trong
+                                workspace/sandbox/project</span>
+                            <!-- Allowed dirs (extra directories bot can access) -->
+                            <div class="mt-3 border-t border-primary/10 pt-2">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span
+                                        class="text-[9px] font-bold uppercase tracking-[0.2em] text-primary/70">Thư mục được phép thêm:</span>
+                                    <button type="button" onclick="addAllowedDir()"
+                                        class="px-2 py-0.5 border border-primary/30 text-primary/60 text-[9px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[11px]">add</span>
+                                        <span>Thêm</span>
+                                    </button>
+                                </div>
+                                <div id="allowed-dirs-list" class="flex flex-col gap-1.5">
+                                    {% for dir in allowed_dirs %}
+                                    <div class="flex items-center gap-2 allowed-dir-row">
+                                        <input type="text" name="allowed_dir_{{ loop.index0 }}" value="{{ dir }}"
+                                            placeholder="D:\Projects\MyApp"
+                                            data-validated=""
+                                            class="flex-1 bg-black/60 border border-primary/20 focus:border-primary outline-none px-3 py-1.5 text-primary font-mono text-[11px] placeholder-primary/35 transition-all duration-300" />
+                                        <button type="button" onclick="checkAllowedDir(this)"
+                                            class="px-2 py-1 border border-primary/40 text-primary/70 hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1"
+                                            title="Kiểm tra hợp lệ">
+                                            <span class="material-symbols-outlined text-[14px]">verified</span>
+                                            <span class="text-[9px] font-bold uppercase tracking-wider">Kiểm tra</span>
+                                        </button>
+                                        <button type="button" onclick="removeAllowedDir(this)"
+                                            class="px-1.5 py-1 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                            title="Xóa">
+                                            <span class="material-symbols-outlined text-[14px]">close</span>
+                                        </button>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <span class="text-[9px] text-primary/30 mt-1 block">Ngoài sandbox, bot còn được truy cập các thư mục liệt kê ở trên</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Section: Gateway -->
+        <!-- ============================================================ -->
+        <div class="matrix-card p-6">
+            <div class="flex items-center justify-between mb-4 border-b border-primary/20 pb-4 cursor-pointer"
+                onclick="toggleSection('gateway-body')">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined glow-text">router</span>
+                    <h3 class="text-xs font-bold uppercase tracking-widest glow-text">Gateway Configuration</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-primary/30 font-mono">gateway.*</span>
+                    <span class="material-symbols-outlined text-primary/80 text-sm"
+                        id="gateway-body-icon">expand_more</span>
+                </div>
+            </div>
+
+            <div id="gateway-body" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="flex flex-col gap-2">
+                        <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Heartbeat_Enabled</label>
+                        <label class="flex items-center gap-4 cursor-pointer group py-2">
+                            <div class="relative">
+                                <input type="checkbox" id="heartbeat_enabled" name="heartbeat_enabled" {% if
+                                    heartbeat_enabled %}checked{% endif %} class="sr-only peer" />
+                                <div
+                                    class="w-14 h-7 bg-black/60 border border-primary/50 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300">
+                                </div>
+                                <div
+                                    class="absolute top-[3px] left-[3px] w-5 h-5 bg-primary/40 peer-checked:bg-primary peer-checked:shadow-[0_0_10px_#00FF41] peer-checked:translate-x-7 transition-all duration-300">
+                                </div>
+                            </div>
+                            <span class="text-sm font-bold glow-text uppercase" id="hb-label">{{ "ACTIVE" if
+                                heartbeat_enabled else "DISABLED" }}</span>
+                        </label>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label for="heartbeat_interval"
+                            class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Heartbeat_Interval_S</label>
+                        <input type="number" id="heartbeat_interval" name="heartbeat_interval"
+                            value="{{ heartbeat_interval }}" min="60" max="86400"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label for="web_port"
+                            class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Web_Dashboard_Port</label>
+                        <input type="number" id="web_port" name="web_port" value="{{ web_port }}" min="1024" max="65535"
+                            class="w-full bg-black/60 border border-primary/50 focus:border-primary focus:shadow-[0_0_15px_rgba(0,255,65,0.3)] outline-none px-4 py-3 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                    </div>
+                    <div class="flex flex-col gap-2" id="web-section">
+                        <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary/90">&gt;
+                            Web_Password
+                            {% if web_password and web_password.startswith('nanobot@') %}
+                            <span class="ml-2 text-yellow-400 normal-case font-normal">⚠ Default active — please change</span>
+                            {% endif %}
+                        </label>
+                        <!-- 2 fields side by side -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <!-- New password -->
+                            <div class="relative">
+                                <input type="password" id="web_password" name="web_password" value="{{ web_password }}"
+                                    data-original="{{ web_password }}"
+                                    placeholder="New password..."
+                                    class="w-full bg-black/60 border {% if web_password and web_password.startswith('nanobot@') %}border-yellow-500/60{% else %}border-primary/50{% endif %} focus:border-primary outline-none px-4 py-3 pr-10 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                                <button type="button"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-primary/30 hover:text-primary transition-colors"
+                                    onmousedown="document.getElementById('web_password').type='text'"
+                                    onmouseup="document.getElementById('web_password').type='password'"
+                                    onmouseleave="document.getElementById('web_password').type='password'"
+                                    title="Hold to reveal">
+                                    <span class="material-symbols-outlined text-[18px]">visibility</span>
+                                </button>
+                            </div>
+                            <!-- Repeat password -->
+                            <div class="relative">
+                                <input type="password" id="web_password_confirm" placeholder="Repeat password..."
+                                    class="w-full bg-black/60 border border-primary/50 focus:border-primary outline-none px-4 py-3 pr-10 text-primary font-mono text-sm placeholder-primary/20 transition-all duration-300" />
+                                <button type="button"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-primary/30 hover:text-primary transition-colors"
+                                    onmousedown="document.getElementById('web_password_confirm').type='text'"
+                                    onmouseup="document.getElementById('web_password_confirm').type='password'"
+                                    onmouseleave="document.getElementById('web_password_confirm').type='password'"
+                                    title="Hold to reveal">
+                                    <span class="material-symbols-outlined text-[18px]">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                        <span id="pwd-match-msg" class="text-[10px] font-mono hidden"></span>
+                        {% if web_password and web_password.startswith('nanobot@') %}
+                        <p class="text-[10px] text-yellow-400/70 font-mono leading-relaxed">
+                            Mật khẩu hiện tại: <code class="text-yellow-300">{{ web_password }}</code><br>
+                            Nhập mật khẩu mới → bấm <strong class="text-primary/80">Save Config</strong> → sau đó <strong class="text-primary/80">restart gateway</strong> để áp dụng.
+                        </p>
+                        {% endif %}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Section: Channels (enabled only) -->
+        <!-- ============================================================ -->
+        <div class="matrix-card p-6">
+            <div class="flex items-center justify-between mb-4 border-b border-primary/20 pb-4 cursor-pointer"
+                onclick="toggleSection('channels-body')">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined glow-text">forum</span>
+                    <h3 class="text-xs font-bold uppercase tracking-widest glow-text">Active Channels</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-primary/30 font-mono">{{ channels | length }} enabled</span>
+                    <span class="material-symbols-outlined text-primary/80 text-sm"
+                        id="channels-body-icon">expand_more</span>
+                </div>
+            </div>
+
+            <div id="channels-body" class="hidden">
+                <!-- Global channel settings -->
+                <div class="flex flex-wrap items-center gap-x-8 gap-y-4 mb-6 pb-4 border-b border-primary/10">
+                    <div class="flex items-center gap-2">
+                        <label class="flex items-center gap-4 cursor-pointer">
+                            <div class="relative">
+                                <input type="checkbox" name="send_progress" {% if send_progress %}checked{% endif %}
+                                    class="sr-only peer" />
+                                <div class="w-12 h-6 bg-black/60 border border-primary/50 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></div>
+                                <div class="absolute top-[2px] left-[2px] w-5 h-5 bg-primary/40 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-6 transition-all duration-300"></div>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase tracking-widest text-primary/60">Send_Progress</span>
+                        </label>
+                        <div class="relative group flex items-center">
+                            <button type="button" class="text-primary/30 hover:text-primary/70 text-[10px] font-mono transition-colors leading-none">(?)</button>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 hidden group-hover:block z-50 pointer-events-none">
+                                <div class="bg-black border border-primary/40 p-3 text-[10px] text-primary/70 font-mono leading-relaxed shadow-[0_0_15px_rgba(0,255,65,0.15)]">
+                                    <p class="text-primary font-bold mb-1">Send_Progress</p>
+                                    Khi bật, bot gửi tin nhắn trung gian trong lúc xử lý (ví dụ: "Đang tìm kiếm...", "Đang đọc file..."). Giúp user biết bot đang làm gì thay vì im lặng chờ.
+                                    <span class="text-primary/40 mt-1 block">Nên tắt nếu channel không hỗ trợ edit message hoặc gây nhiễu.</span>
+                                </div>
+                                <div class="w-2 h-2 bg-black border-r border-b border-primary/40 rotate-45 mx-auto -mt-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="flex items-center gap-4 cursor-pointer">
+                            <div class="relative">
+                                <input type="checkbox" name="send_tool_hints" {% if send_tool_hints %}checked{% endif %}
+                                    class="sr-only peer" />
+                                <div class="w-12 h-6 bg-black/60 border border-primary/50 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></div>
+                                <div class="absolute top-[2px] left-[2px] w-5 h-5 bg-primary/40 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-6 transition-all duration-300"></div>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase tracking-widest text-primary/60">Send_Tool_Hints</span>
+                        </label>
+                        <div class="relative group flex items-center">
+                            <button type="button" class="text-primary/30 hover:text-primary/70 text-[10px] font-mono transition-colors leading-none">(?)</button>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 hidden group-hover:block z-50 pointer-events-none">
+                                <div class="bg-black border border-primary/40 p-3 text-[10px] text-primary/70 font-mono leading-relaxed shadow-[0_0_15px_rgba(0,255,65,0.15)]">
+                                    <p class="text-primary font-bold mb-1">Send_Tool_Hints</p>
+                                    Khi bật, bot thông báo ngắn khi bắt đầu dùng tool (ví dụ: "🔍 Đang tìm kiếm web...", "📂 Đang đọc file..."). Giúp user hiểu bot đang thực hiện thao tác gì.
+                                    <span class="text-primary/40 mt-1 block">Khác Send_Progress: chỉ thông báo tên tool, không phải toàn bộ intermediate output.</span>
+                                </div>
+                                <div class="w-2 h-2 bg-black border-r border-b border-primary/40 rotate-45 mx-auto -mt-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-primary/60">Debounce</span>
+                        <div class="relative group flex items-center mr-1">
+                            <button type="button" class="text-primary/30 hover:text-primary/70 text-[10px] font-mono transition-colors leading-none">(?)</button>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 hidden group-hover:block z-50 pointer-events-none">
+                                <div class="bg-black border border-primary/40 p-3 text-[10px] text-primary/70 font-mono leading-relaxed shadow-[0_0_15px_rgba(0,255,65,0.15)]">
+                                    <p class="text-primary font-bold mb-1">Debounce</p>
+                                    Thời gian chờ (giây) trước khi xử lý tin nhắn. Nếu user gửi nhiều tin liên tiếp trong khoảng này, bot gộp tất cả thành 1 lần xử lý.
+                                    <br><br>
+                                    <span class="text-primary/60">Ví dụ (debounce = 2s):</span><br>
+                                    • "Bạn ơi..." → chờ 2s<br>
+                                    • "cho tôi hỏi..." → reset timer<br>
+                                    • "về Python nhé" → gộp 3 tin, trả lời 1 lần
+                                    <span class="text-primary/40 mt-1 block">Đặt 0 để tắt. Khuyến nghị: 1.5–3s.</span>
+                                </div>
+                                <div class="w-2 h-2 bg-black border-r border-b border-primary/40 rotate-45 mx-auto -mt-1"></div>
+                            </div>
+                        </div>
+                        <input type="number" id="debounce_seconds" name="debounce_seconds"
+                            value="{{ debounce_seconds }}" step="0.5" min="0" max="10"
+                            class="w-16 bg-black/60 border border-primary/30 focus:border-primary outline-none px-2 py-1 text-primary font-mono text-xs text-center transition-all duration-300" />
+                        <span class="text-[9px] text-primary/30 font-mono">sec</span>
+                    </div>
+                    {% if disabled_channels %}
+                    <div class="flex items-center gap-2">
+                        <select id="enable-channel-select"
+                            class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-2 py-1 text-primary font-mono text-[10px] transition-all duration-300 appearance-none cursor-pointer"
+                            style="background-image: none;">
+                            <option value="" style="background: #0a0a0a; color: #00FF41;">+ channels</option>
+                            {% for dc in disabled_channels %}
+                            <option value="{{ dc }}" style="background: #0a0a0a; color: #00FF41;">{{ dc }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" onclick="enableSelectedChannel()"
+                            class="px-2 py-1 border border-primary/40 text-primary/70 text-[9px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[12px]">add_circle</span>
+                            <span>Enable</span>
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                <div id="toggle-channel-result" class="mt-2 text-[11px] font-mono" style="display:none;"></div>
+
+                {% if channels %}
+                <div class="space-y-4" id="enabled-channels-list">
+                    {% for ch in channels %}
+                    <div class="border border-primary/20 p-4 bg-primary/5" id="ch-card-{{ ch.name }}">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_6px_#00FF41]"></span>
+                            <span class="text-[11px] font-bold uppercase tracking-widest text-primary">{{ ch.name }}</span>
+                            <span class="text-[9px] text-primary/30 font-mono">channels.{{ ch.name }}</span>
+                            <button type="button" onclick="toggleChannel('{{ ch.name }}', false)"
+                                class="ml-auto px-2 py-1 border border-red-500/30 text-red-400/60 text-[9px] font-bold uppercase tracking-wider hover:bg-red-500/10 hover:border-red-500 hover:text-red-400 transition-all duration-300 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[12px]">power_settings_new</span>
+                                <span>Disable</span>
+                            </button>
+                        </div>
+                        {% if ch.name == 'telegram' %}
+                        {# Telegram: editable fields #}
+                        <div class="grid grid-cols-1 gap-4 text-[10px] font-mono">
+                            {# Token #}
+                            <div class="flex flex-col gap-1">
+                                <div class="flex items-center gap-3">
+                                    <label class="text-primary/70 font-bold">token</label>
+                                    <button type="button" onclick="testTelegramToken()"
+                                        id="test-telegram-btn"
+                                        class="px-2 py-0.5 border border-primary/30 text-primary/50 text-[9px] font-bold uppercase tracking-wider hover:bg-primary/10 hover:border-primary hover:text-primary transition-all duration-300 flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[11px]">verified</span>
+                                        <span>Test</span>
+                                    </button>
+                                    <span id="telegram-test-result" class="text-[10px] font-mono" style="display: none;"></span>
+                                </div>
+                                <input type="password" id="channel_telegram_token" name="channel_telegram_token"
+                                    value="{{ ch.fields.get('token', '') }}"
+                                    placeholder="e.g. 123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                    class="w-full bg-black border border-primary/20 text-primary/90 text-[10px] font-mono px-2 py-1.5 focus:outline-none focus:border-primary/60">
+                                <span class="text-primary/35">Lấy từ @BotFather trên Telegram. Để trống nếu không muốn thay đổi.</span>
+                            </div>
+                            {# allow_from #}
+                            <div class="flex flex-col gap-1">
+                                <label class="text-primary/70 font-bold">allow_from</label>
+                                <input type="text" name="channel_telegram_allow_from"
+                                    value="{{ ch.fields.get('allow_from', ch.fields.get('allowFrom', '')) }}"
+                                    placeholder="e.g. 123456789, 987654321"
+                                    class="w-full bg-black border border-primary/20 text-primary/90 text-[10px] font-mono px-2 py-1.5 focus:outline-none focus:border-primary/60">
+                                <span class="text-primary/35">Danh sách Telegram User ID được phép nhắn tin, cách nhau bởi dấu phẩy. Lấy ID của bạn từ @userinfobot.</span>
+                            </div>
+                            {# proxy #}
+                            <div class="flex flex-col gap-1">
+                                <label class="text-primary/70 font-bold">proxy <span class="text-primary/35 font-normal">(tùy chọn)</span></label>
+                                <input type="text" name="channel_telegram_proxy"
+                                    value="{{ ch.fields.get('proxy', '') }}"
+                                    placeholder="e.g. http://127.0.0.1:7890 hoặc socks5://127.0.0.1:1080"
+                                    class="w-full bg-black border border-primary/20 text-primary/90 text-[10px] font-mono px-2 py-1.5 focus:outline-none focus:border-primary/60">
+                                <span class="text-primary/35">Để trống nếu kết nối Telegram trực tiếp (không qua proxy).</span>
+                            </div>
+                            {# reply_to_message #}
+                            <div class="flex flex-col gap-1">
+                                <label class="flex items-center gap-3 cursor-pointer py-1">
+                                    <div class="relative">
+                                        <input type="checkbox" name="channel_telegram_reply_to_message"
+                                            id="channel_telegram_reply_to_message"
+                                            {% set _reply_to_message = ch.fields.get('reply_to_message', ch.fields.get('replyToMessage')) %}
+                                            {% if _reply_to_message == True or _reply_to_message == 'True' %}checked{% endif %}
+                                            class="sr-only peer" />
+                                        <div class="w-10 h-5 bg-black/60 border border-primary/30 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></div>
+                                        <div class="absolute top-[2px] left-[2px] w-4 h-4 bg-primary/30 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-5 transition-all duration-300"></div>
+                                    </div>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-primary/60 peer-checked:text-primary">reply_to_message</span>
+                                </label>
+                                <span class="text-primary/35 pl-[52px] text-[10px]">Khi bật, bot sẽ reply trích dẫn tin nhắn gốc của user thay vì gửi tin nhắn mới độc lập.</span>
+                            </div>
+                            {# streaming #}
+                            <div class="flex flex-col gap-1">
+                                <label class="flex items-center gap-3 cursor-pointer py-1">
+                                    <div class="relative">
+                                        <input type="checkbox" name="channel_telegram_streaming"
+                                            id="channel_telegram_streaming"
+                                            {% set _stream = ch.fields.get('streaming') %}
+                                            {% if _stream == True or _stream == 'True' or _stream is none %}checked{% endif %}
+                                            class="sr-only peer" />
+                                        <div class="w-10 h-5 bg-black/60 border border-primary/30 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></div>
+                                        <div class="absolute top-[2px] left-[2px] w-4 h-4 bg-primary/30 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-5 transition-all duration-300"></div>
+                                    </div>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-primary/60 peer-checked:text-primary">streaming</span>
+                                </label>
+                                <span class="text-primary/35 pl-[52px] text-[10px]">Khi bật, bot sẽ stream phản hồi từng phần (trên webchat luôn là streaming dù có tắt). Tắt nếu muốn gửi phản hồi đầy đủ 1 lần..</span>
+                            </div>
+                            {# group_policy #}
+                            <div class="flex flex-col gap-3 border border-primary/15 bg-black/20 p-4">
+                                {% set telegram_group_policy = ch.fields.get('group_policy', ch.fields.get('groupPolicy', 'mention')) %}
+                                <div class="flex items-center justify-between gap-3">
+                                    <label class="text-[10px] font-bold uppercase tracking-wider text-primary/60">group_policy</label>
+                                    <span class="text-[9px] text-primary/25 font-mono">groupPolicy</span>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <label class="cursor-pointer border border-primary/20 bg-black/30 p-3 hover:border-primary/50 transition-colors">
+                                        <div class="flex items-center gap-3">
+                                            <span class="relative inline-flex w-10 h-5 shrink-0">
+                                                <input type="radio" name="channel_telegram_group_policy" value="mention"
+                                                    {% if telegram_group_policy == "mention" %}checked{% endif %}
+                                                    class="sr-only peer">
+                                                <span class="w-10 h-5 bg-black/60 border border-primary/30 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></span>
+                                                <span class="absolute top-[2px] left-[2px] w-4 h-4 bg-primary/30 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-5 transition-all duration-300"></span>
+                                            </span>
+                                            <span class="text-xs font-bold uppercase tracking-wider text-primary/80">Mentions only</span>
+                                        </div>
+                                        <p class="mt-2 text-[10px] leading-relaxed text-primary/35">
+                                            Ignore unmentioned group chat before LLM. No token cost.
+                                        </p>
+                                    </label>
+                                    <label class="cursor-pointer border border-primary/20 bg-black/30 p-3 hover:border-primary/50 transition-colors">
+                                        <div class="flex items-center gap-3">
+                                            <span class="relative inline-flex w-10 h-5 shrink-0">
+                                                <input type="radio" name="channel_telegram_group_policy" value="ambient"
+                                                    {% if telegram_group_policy == "ambient" %}checked{% endif %}
+                                                    class="sr-only peer">
+                                                <span class="w-10 h-5 bg-black/60 border border-primary/30 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></span>
+                                                <span class="absolute top-[2px] left-[2px] w-4 h-4 bg-primary/30 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-5 transition-all duration-300"></span>
+                                            </span>
+                                            <span class="text-xs font-bold uppercase tracking-wider text-primary/80">Smart ambient</span>
+                                        </div>
+                                        <p class="mt-2 text-[10px] leading-relaxed text-primary/35">
+                                            Let LLM decide whether to answer unmentioned group chat.
+                                        </p>
+                                    </label>
+                                    <label class="cursor-pointer border border-primary/20 bg-black/30 p-3 hover:border-primary/50 transition-colors">
+                                        <div class="flex items-center gap-3">
+                                            <span class="relative inline-flex w-10 h-5 shrink-0">
+                                                <input type="radio" name="channel_telegram_group_policy" value="open"
+                                                    {% if telegram_group_policy == "open" %}checked{% endif %}
+                                                    class="sr-only peer">
+                                                <span class="w-10 h-5 bg-black/60 border border-primary/30 peer-checked:bg-primary/30 peer-checked:border-primary transition-all duration-300"></span>
+                                                <span class="absolute top-[2px] left-[2px] w-4 h-4 bg-primary/30 peer-checked:bg-primary peer-checked:shadow-[0_0_8px_#00FF41] peer-checked:translate-x-5 transition-all duration-300"></span>
+                                            </span>
+                                            <span class="text-xs font-bold uppercase tracking-wider text-primary/80">Open</span>
+                                        </div>
+                                        <p class="mt-2 text-[10px] leading-relaxed text-primary/35">
+                                            Treat every group message like normal chat. Debug/private groups only.
+                                        </p>
+                                    </label>
+                                </div>
+                            </div>
+                            <p class="text-[9px] text-yellow-400/60 mt-1 border-t border-yellow-400/20 pt-2">
+                                ⚠ Thay đổi channel config cần <strong>restart gateway</strong> để có hiệu lực
+                            </p>
+                        </div>
+                        {% else %}
+                        {# Other channels: read-only #}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] font-mono">
+                            {% for fname, fval in ch.fields.items() %}
+                            <div class="flex gap-2 py-1 border-b border-primary/5">
+                                <span class="text-primary/40 min-w-[120px]">{{ fname }}:</span>
+                                {% if 'token' in fname or 'secret' in fname or 'password' in fname %}
+                                <span class="text-primary/60">{{ '***' + fval[-4:] if fval and fval|string|length > 4 else fval }}</span>
+                                {% else %}
+                                <span class="text-primary/80 break-all">{{ fval }}</span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <p class="text-[9px] text-primary/30 mt-2 pt-2 border-t border-primary/10">
+                            Cấu hình chi tiết trong <strong>config.json</strong> → <code>channels.{{ ch.name }}</code>. Restart gateway để áp dụng.
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="py-4 text-center">
+                    <span class="text-[10px] text-primary/30 uppercase tracking-widest">No channels currently
+                        enabled</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex items-center gap-4 flex-wrap">
+            <button type="submit" id="save-btn"
+                class="px-8 py-3 border border-primary bg-primary/10 text-primary font-bold uppercase tracking-[0.3em] text-sm hover:bg-primary hover:text-black transition-all duration-300 glow-text flex items-center gap-3 group">
+                <span class="material-symbols-outlined text-sm group-hover:text-black transition-colors">save</span>
+                <span>Save Configuration</span>
+                <span class="blinking">_</span>
+            </button>
+            <button type="button" id="restart-btn" onclick="restartGateway()"
+                class="px-6 py-3 border border-red-500/60 bg-red-500/10 text-red-400 font-bold uppercase tracking-[0.2em] text-sm hover:bg-red-500 hover:text-black transition-all duration-300 flex items-center gap-3 group">
+                <span class="material-symbols-outlined text-sm group-hover:text-black transition-colors">restart_alt</span>
+                <span>Restart Gateway</span>
+            </button>
+            <span class="text-[10px] text-primary/30 uppercase tracking-wider">Some changes require restart</span>
+        </div>
+    </form>
+
+    <!-- Terminal Log Footer -->
+    <div class="matrix-card p-4 font-mono text-[11px] leading-tight space-y-1">
+        <div class="flex gap-2">
+            <span class="text-primary/40">[CFG]</span>
+            <span class="text-primary">Configuration module loaded... <span class="text-white">READY</span></span>
+        </div>
+        <div class="flex gap-2">
+            <span class="text-primary/40">[CFG]</span>
+            <span class="text-primary">Sections: Neural Core | Providers | Tools | Gateway | Channels</span>
+        </div>
+        <div class="flex gap-2 pt-2 border-t border-primary/10 mt-2">
+            <span class="text-primary/60">$</span>
+            <span class="text-primary cursor-default outline-none">root@nanobot_os:/config# <span
+                    class="bg-primary text-black ml-1 px-1"> </span></span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .crt-overlay,
+    .crt-scanline {
+        display: none !important;
+    }
+
+    @keyframes toastIn {
+        from {
+            opacity: 0;
+            transform: translateX(100px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @keyframes toastOut {
+        from {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        to {
+            opacity: 0;
+            transform: translateX(100px);
+        }
+    }
+</style>
+<script>
+    // ── Provider Test System ──
+    const providerTestState = {};  // { providerName: 'untested' | 'pass' | 'warn' | 'fail' }
+
+    // ── Provider data map (from server) ──
+    const _providerData = {
+        {% for p in providers %}
+        '{{ p.name }}': { key: {{ p.api_key | tojson }}, base: {{ p.api_base | tojson }}, hasKey: {{ 'true' if p.has_key else 'false' }} },
+        {% endfor %}
+    };
+    let _activeProvider = null;
+
+    // ── Combobox Portal Dropdown ──
+    // Build dropdown DOM once, appended to body (escapes all stacking contexts)
+    let _portalDropdown = null;
+    function _buildPortalDropdown() {
+        if (_portalDropdown) return;
+        const dd = document.createElement('div');
+        dd.id = 'provider-dropdown-portal';
+        dd.style.cssText = [
+            'position: fixed',
+            'z-index: 9999',
+            'background: rgb(3, 8, 3)',
+            'border: 1px solid rgba(0, 255, 65, 0.45)',
+            'box-shadow: 0 8px 40px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,255,65,0.1)',
+            'max-height: 260px',
+            'overflow-y: auto',
+            'display: none',
+            'min-width: 200px',
+        ].join(';');
+
+        // Populate with all providers from _providerData
+        Object.entries(_providerData).forEach(([name, info]) => {
+            const row = document.createElement('div');
+            row.className = 'provider-option';
+            row.dataset.name = name;
+            row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;font-family:monospace;font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#00FF41;transition:background 0.12s;';
+            row.onmouseenter = () => row.style.background = 'rgba(0,255,65,0.12)';
+            row.onmouseleave = () => row.style.background = '';
+
+            const dot = document.createElement('span');
+            dot.style.cssText = `width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${info.hasKey ? '#00FF41' : 'rgba(0,255,65,0.2)'};${info.hasKey ? 'box-shadow:0 0 5px #00FF41;' : ''}`;
+            const label = document.createElement('span');
+            label.textContent = name;
+
+            row.appendChild(dot);
+            row.appendChild(label);
+
+            if (info.hasKey) {
+                const badge = document.createElement('span');
+                badge.textContent = 'configured';
+                badge.style.cssText = 'margin-left:auto;font-size:9px;color:rgba(0,255,65,0.4);font-weight:400;letter-spacing:0.1em;';
+                row.appendChild(badge);
+            }
+
+            row.onclick = () => selectProvider(name);
+            dd.appendChild(row);
+        });
+
+        // No results row
+        const noRes = document.createElement('div');
+        noRes.id = 'provider-no-results';
+        noRes.textContent = 'No providers matching...';
+        noRes.style.cssText = 'display:none;padding:10px 16px;font-size:11px;color:rgba(0,255,65,0.25);font-family:monospace;';
+        dd.appendChild(noRes);
+
+        document.body.appendChild(dd);
+        _portalDropdown = dd;
+    }
+
+    function _positionPortalDropdown() {
+        const wrap = document.getElementById('provider-picker-wrap');
+        if (!wrap || !_portalDropdown) return;
+        const rect = wrap.getBoundingClientRect();
+        _portalDropdown.style.top = (rect.bottom + 2) + 'px';
+        _portalDropdown.style.left = rect.left + 'px';
+        _portalDropdown.style.width = rect.width + 'px';
+        // Dynamic max-height: never go below viewport bottom (minus 20px margin)
+        const availableH = window.innerHeight - rect.bottom - 20;
+        _portalDropdown.style.maxHeight = Math.min(220, Math.max(80, availableH)) + 'px';
+    }
+
+    function openProviderDropdown() {
+        _buildPortalDropdown();
+        // Re-append to body as LAST child every open — ensures DOM order
+        // beats backdrop-filter stacking contexts on sibling section cards
+        document.body.appendChild(_portalDropdown);
+        _portalDropdown.style.zIndex = '2147483647';
+        _positionPortalDropdown();
+        _portalDropdown.style.display = 'block';
+        filterProviderDropdown();
+        // Reposition on scroll/resize
+        window._providerDropdownScrollHandler = () => _positionPortalDropdown();
+        window.addEventListener('scroll', window._providerDropdownScrollHandler, { passive: true, capture: true });
+        setTimeout(() => {
+            document.addEventListener('click', _closeOnOutside, { once: true });
+        }, 0);
+    }
+    function _closeOnOutside(e) {
+        const wrap = document.getElementById('provider-picker-wrap');
+        const isInWrap = wrap && wrap.contains(e.target);
+        const isInDrop = _portalDropdown && _portalDropdown.contains(e.target);
+        if (isInWrap || isInDrop) {
+            document.addEventListener('click', _closeOnOutside, { once: true });
+            return;
+        }
+        closeProviderDropdown();
+    }
+    function closeProviderDropdown() {
+        if (_portalDropdown) _portalDropdown.style.display = 'none';
+        if (window._providerDropdownScrollHandler) {
+            window.removeEventListener('scroll', window._providerDropdownScrollHandler, { capture: true });
+        }
+    }
+    function filterProviderDropdown() {
+        if (!_portalDropdown) return;
+        const q = (document.getElementById('provider-search-input')?.value || '').toLowerCase();
+        let visible = 0;
+        _portalDropdown.querySelectorAll('.provider-option').forEach(el => {
+            const name = el.dataset.name || '';
+            const show = !q || name.includes(q);
+            el.style.display = show ? 'flex' : 'none';
+            if (show) visible++;
+        });
+        const noRes = document.getElementById('provider-no-results');
+        if (noRes) noRes.style.display = visible > 0 ? 'none' : 'block';
+    }
+
+    function selectProvider(name) {
+        _activeProvider = name;
+        const data = _providerData[name] || { key: '', base: '', hasKey: false };
+
+        // Update search input display
+        const searchInput = document.getElementById('provider-search-input');
+        if (searchInput) searchInput.value = name;
+        closeProviderDropdown();
+
+        // Status dot in search bar
+        const dot = document.getElementById('provider-selected-dot');
+        if (dot) {
+            dot.className = 'w-2 h-2 rounded-full mr-3 transition-colors duration-300 ' +
+                (data.hasKey ? 'bg-primary shadow-[0_0_5px_#00FF41]' : 'bg-primary/20');
+        }
+
+        // Fill active card
+        document.getElementById('active-provider-name').textContent = name;
+        const activeDot = document.getElementById('active-provider-dot');
+        if (activeDot) {
+            activeDot.className = 'w-2 h-2 rounded-full ' +
+                (data.hasKey ? 'bg-primary shadow-[0_0_6px_#00FF41]' : 'bg-primary/20');
+        }
+        document.getElementById('active-provider-key').value = data.key || '';
+        document.getElementById('active-provider-base').value = data.base || '';
+        document.getElementById('active-provider-model').value = '';
+
+        // Reset test state for this provider
+        const resultEl = document.getElementById('test-result-active');
+        if (resultEl) { resultEl.style.display = 'none'; resultEl.innerHTML = ''; }
+        const card = document.getElementById('provider-active-card');
+        if (card) { card.style.borderColor = ''; card.style.boxShadow = ''; }
+
+        // Show card, hide hint
+        if (card) card.classList.remove('hidden');
+        const hint = document.getElementById('provider-hint');
+        if (hint) hint.style.display = 'none';
+
+        // Refresh tested models
+        _refreshActiveTestedModels();
+
+        // Show/hide OAuth panel based on selected provider
+        oauthPanelUpdate(name);
+    }
+    function syncActiveProvider(field) {
+        if (!_activeProvider) return;
+        const keyEl = document.getElementById('active-provider-key');
+        const baseEl = document.getElementById('active-provider-base');
+        const val = field === 'key' ? keyEl?.value : baseEl?.value;
+
+        // Keep hidden input in sync (so form POST includes the new value)
+        if (field === 'key') {
+            const h = document.getElementById('hidden-key-' + _activeProvider);
+            if (h) h.value = val || '';
+            if (_providerData[_activeProvider]) _providerData[_activeProvider].key = val || '';
+        } else {
+            const h = document.getElementById('hidden-base-' + _activeProvider);
+            if (h) h.value = val || '';
+            if (_providerData[_activeProvider]) _providerData[_activeProvider].base = val || '';
+        }
+        onProviderFieldChange(_activeProvider);
+    }
+    function _refreshActiveTestedModels() {
+        if (!_activeProvider || !window._testedModelsCache) return;
+        const models = window._testedModelsCache[_activeProvider];
+        const wrap = document.getElementById('tested-models-active');
+        const list = document.getElementById('tested-models-list-active');
+        if (!wrap || !list) return;
+        if (models && models.length) {
+            list.innerHTML = '';
+            models.forEach(m => {
+                // Wrapper with relative positioning for delete btn
+                const badge = document.createElement('span');
+                badge.className = 'group relative inline-flex items-center';
+
+                // Fill button (model name label)
+                const fillBtn = document.createElement('button');
+                fillBtn.type = 'button';
+                fillBtn.textContent = m;
+                fillBtn.style.cssText = 'padding:2px 22px 2px 6px;border:1px solid rgba(0,255,65,0.3);font-size:9px;font-family:monospace;color:rgba(0,255,65,0.5);cursor:pointer;transition:all 0.15s;background:transparent;white-space:nowrap;';
+                fillBtn.onmouseenter = () => { fillBtn.style.color='#00FF41'; fillBtn.style.borderColor='rgba(0,255,65,0.8)'; };
+                fillBtn.onmouseleave = () => { fillBtn.style.color='rgba(0,255,65,0.5)'; fillBtn.style.borderColor='rgba(0,255,65,0.3)'; };
+                fillBtn.onclick = () => _fillActiveModel(m);
+
+                // Delete × button (appears on badge hover)
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.textContent = '×';
+                delBtn.title = 'Remove from history';
+                delBtn.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:rgba(255,80,80,0);font-size:11px;line-height:1;cursor:pointer;padding:0 2px;transition:color 0.15s;';
+                // Show/hide × on badge hover
+                badge.onmouseenter = () => delBtn.style.color = 'rgba(255,80,80,0.7)';
+                badge.onmouseleave = () => delBtn.style.color = 'rgba(255,80,80,0)';
+                delBtn.onmouseenter = () => delBtn.style.color = 'rgba(255,80,80,1)';
+                delBtn.onclick = (e) => { e.stopPropagation(); deleteTestedModel(_activeProvider, m); };
+
+                badge.appendChild(fillBtn);
+                badge.appendChild(delBtn);
+                list.appendChild(badge);
+            });
+            wrap.style.display = '';
+        } else {
+            wrap.style.display = 'none';
+        }
+    }
+    function _fillActiveModel(m) {
+        const inp = document.getElementById('active-provider-model');
+        if (inp) { inp.value = m; testProvider(_activeProvider); }
+    }
+    async function deleteTestedModel(provider, model, rerenderAll = true) {
+        try {
+            await fetch('/config/tested-models', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider, model }),
+            });
+            // Remove from local cache and re-render
+            if (window._testedModelsCache && window._testedModelsCache[provider]) {
+                window._testedModelsCache[provider] = window._testedModelsCache[provider].filter(m => m !== model);
+                if (!window._testedModelsCache[provider].length) delete window._testedModelsCache[provider];
+            }
+            if (rerenderAll) {
+                _refreshActiveTestedModels();
+                _renderNeuralTestedModels();
+            }
+        } catch (e) {
+            console.warn('Failed to delete tested model:', e);
+        }
+    }
+
+    let testedModelsCache = {};
+
+    // Load tested models on page load
+    async function loadTestedModels() {
+        try {
+            const resp = await fetch('/config/tested-models');
+            testedModelsCache = await resp.json();
+            window._testedModelsCache = testedModelsCache;  // expose for combobox UI
+            // Refresh active provider card's tested models
+            _refreshActiveTestedModels();
+            // Also populate Neural Core tested models (all models from all providers)
+            _renderNeuralTestedModels();
+        } catch (e) {
+            console.warn('Failed to load tested models:', e);
+        }
+    }
+
+    function _renderNeuralTestedModels() {
+        const cache = window._testedModelsCache || {};
+        const allModels = [...new Set(Object.values(cache).flat())];
+        const ncContainer = document.getElementById('model-tested-models');
+        const ncList = document.getElementById('model-tested-models-list');
+        if (allModels.length === 0) { ncContainer.style.display = 'none'; return; }
+        ncContainer.style.display = 'block';
+        ncList.innerHTML = '';
+        allModels.forEach(m => {
+            const badge = document.createElement('span');
+            badge.style.cssText = 'position:relative;display:inline-flex;align-items:center;';
+            const fillBtn = document.createElement('button');
+            fillBtn.type = 'button';
+            fillBtn.textContent = m;
+            fillBtn.style.cssText = 'padding:2px 22px 2px 6px;border:1px solid rgba(0,255,65,0.2);font-size:9px;font-family:monospace;color:rgba(0,255,65,0.6);cursor:pointer;transition:all 0.15s;background:transparent;white-space:nowrap;';
+            fillBtn.onmouseenter = () => { fillBtn.style.color='#00FF41'; fillBtn.style.borderColor='rgba(0,255,65,0.8)'; fillBtn.style.background='rgba(0,255,65,0.08)'; };
+            fillBtn.onmouseleave = () => { fillBtn.style.color='rgba(0,255,65,0.6)'; fillBtn.style.borderColor='rgba(0,255,65,0.2)'; fillBtn.style.background='transparent'; };
+            fillBtn.onclick = () => useTestedModelForNeural(m);
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.textContent = 'x';
+            delBtn.title = 'Remove from history';
+            delBtn.style.cssText = 'position:absolute;right:2px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:rgba(255,80,80,0);font-size:11px;line-height:1;cursor:pointer;padding:0 2px;transition:color 0.15s;';
+            badge.onmouseenter = () => delBtn.style.color = 'rgba(255,80,80,0.7)';
+            badge.onmouseleave = () => delBtn.style.color = 'rgba(255,80,80,0)';
+            delBtn.onmouseenter = () => delBtn.style.color = 'rgba(255,80,80,1)';
+            delBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const providers = Object.entries(cache).filter(([, ms]) => ms.includes(m)).map(([p]) => p);
+                for (const p of providers) await deleteTestedModel(p, m, false);
+                _renderNeuralTestedModels();
+            };
+            badge.appendChild(fillBtn);
+            badge.appendChild(delBtn);
+            ncList.appendChild(badge);
+        });
+    }
+
+    function useTestedModel(provider, model) {
+        // Click tested model badge → fill active card's Test Model input
+        if (_activeProvider === provider) {
+            const inp = document.getElementById('active-provider-model');
+            if (inp) inp.value = model;
+        } else {
+            selectProvider(provider);
+            setTimeout(() => {
+                const inp = document.getElementById('active-provider-model');
+                if (inp) inp.value = model;
+            }, 50);
+        }
+    }
+
+    function useTestedModelForNeural(model) {
+        const modelInput = document.getElementById('model');
+        if (modelInput) {
+            modelInput.value = model;
+        }
+    }
+
+    async function testModel() {
+        const modelInput = document.getElementById('model');
+        const providerSelect = document.getElementById('provider');
+        const btn = document.getElementById('btn-test-model');
+        const resultEl = document.getElementById('model-test-result');
+
+        const model = modelInput ? modelInput.value.trim() : '';
+        const providerName = providerSelect ? providerSelect.value : 'auto';
+
+        if (!model) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<span class="text-yellow-400">⚠ Enter a model name first</span>';
+            return;
+        }
+
+                // Find provider key+base using _providerData + hidden-key-* inputs
+        // (input-key-* elements removed in combobox refactor)
+        let apiKey = '', apiBase = '', actualProvider = providerName;
+        const _oauthProviders = ['openai_codex', 'github_copilot'];
+        if (providerName !== 'auto') {
+            const keyEl = document.getElementById('hidden-key-' + providerName);
+            const baseEl = document.getElementById('hidden-base-' + providerName);
+            apiKey = keyEl ? keyEl.value.trim() : (_providerData[providerName] ? _providerData[providerName].key : '');
+            apiBase = baseEl ? baseEl.value.trim() : (_providerData[providerName] ? _providerData[providerName].base : '');
+            // OAuth providers don't use API keys — skip the key check
+            if (!apiKey && !_oauthProviders.includes(providerName)) {
+                resultEl.style.display = 'block';
+                resultEl.innerHTML = '<span class="text-yellow-400">⚠ Provider \'' + providerName + '\' chưa có API key. Hãy nhập key cho provider này trước, hoặc đổi sang provider khác.</span>';
+                return;
+            }
+        } else {
+            // Auto mode: find first provider with a key, or first OAuth provider
+            for (const pName of Object.keys(_providerData)) {
+                const info = _providerData[pName];
+                const k = (info.key || '').trim();
+                if (k) {
+                    apiKey = k;
+                    apiBase = (info.base || '').trim();
+                    actualProvider = pName;
+                    break;
+                }
+            }
+            // Fallback: use OAuth provider if no key found
+            if (!apiKey) {
+                for (const pName of _oauthProviders) {
+                    if (_providerData[pName]) { actualProvider = pName; break; }
+                }
+            }
+        }
+
+
+        if (!apiKey && !_oauthProviders.includes(actualProvider)) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<span class="text-yellow-400">⚠ No API key found — configure a provider key first</span>';
+            return;
+        }
+
+        // Spinner
+        btn.disabled = true;
+        btn.innerHTML = '<div class="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div><span>Testing...</span>';
+
+        try {
+            const resp = await fetch('/config/test-provider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: actualProvider, api_key: apiKey, api_base: apiBase, model: model }),
+            });
+            const data = await resp.json();
+
+            resultEl.style.display = 'block';
+            if (data.success) {
+                // Auto-save model + provider
+                const saveResp = await fetch('/config/save-model', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: model, provider: actualProvider }),
+                });
+                const saveData = await saveResp.json();
+                resultEl.innerHTML = '<span class="text-green-400">✓ ' + data.message +
+                    (saveData.success ? ' — Model + Provider saved ✓' : '') + '</span>' +
+                    '<br><span class="text-primary/50 text-[10px]">✓ Thay đổi có hiệu lực cho lần chat tiếp theo</span>';
+                loadTestedModels();
+            } else if (data.suggestion) {
+                resultEl.innerHTML = '<span class="text-yellow-400">⚠ ' + data.error + '</span>' +
+                    '<br><button type="button" onclick="document.getElementById(\'model\').value=\'' + data.suggestion + '\';testModel();" ' +
+                    'class="mt-1 px-2 py-0.5 border border-primary/40 text-[10px] text-primary/70 hover:bg-primary/10 hover:text-primary hover:border-primary transition-all cursor-pointer">' +
+                    '→ Dùng: ' + data.suggestion + '</button>';
+            } else if (data.key_valid) {
+                resultEl.innerHTML = '<span class="text-yellow-400">⚠ ' + data.error + '</span>';
+            } else {
+                resultEl.innerHTML = '<span class="text-red-400">✗ ' + data.error + '</span>';
+            }
+        } catch (e) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<span class="text-red-400">✗ Network error: ' + e.message + '</span>';
+        }
+
+        // Restore button
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[14px]">bolt</span><span>Test</span>';
+    }
+
+    async function autoSaveProvider(providerName, apiKey, apiBase) {
+        try {
+            const resp = await fetch('/config/save-provider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: providerName, api_key: apiKey, api_base: apiBase }),
+            });
+            const data = await resp.json();
+            return data.success;
+        } catch (e) {
+            console.warn('Auto-save failed:', e);
+            return false;
+        }
+    }
+
+    function applySuggestion(providerName, suggested) {
+        const inp = document.getElementById('active-provider-model');
+        if (inp && _activeProvider === providerName) {
+            inp.value = suggested;
+            testProvider(providerName);
+        }
+    }
+
+    async function testProvider(providerName) {
+        if (!providerName) return;
+        // Read values from the single active card
+        const keyInput = document.getElementById('active-provider-key');
+        const baseInput = document.getElementById('active-provider-base');
+        const providerModelInput = document.getElementById('active-provider-model');
+        const btn = document.getElementById('btn-test-active');
+        const resultEl = document.getElementById('test-result-active');
+        const card = document.getElementById('provider-active-card');
+
+        const apiKey = keyInput ? keyInput.value.trim() : '';
+        const apiBase = baseInput ? baseInput.value.trim() : '';
+        const model = providerModelInput ? providerModelInput.value.trim() : '';
+
+        if (!model) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<span class="text-yellow-400">⚠ Hãy nhập model name vào ô Test Model (VD: gemini/gemini-2.0-flash)</span>';
+            return;
+        }
+        if (!apiKey) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<span class="text-yellow-400">⚠ Enter API key first</span>';
+            return;
+        }
+
+        // Show spinner
+        btn.disabled = true;
+        btn.innerHTML = '<div class="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div><span>Testing...</span>';
+
+        try {
+            const resp = await fetch('/config/test-provider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: providerName, api_key: apiKey, api_base: apiBase, model: model }),
+            });
+            const data = await resp.json();
+
+            resultEl.style.display = 'block';
+            if (data.success) {
+                // Full success — auto-save provider
+                providerTestState[providerName] = 'pass';
+                const saveResult = await autoSaveProvider(providerName, apiKey, apiBase);
+                resultEl.innerHTML = '<span class="text-green-400">✓ ' + data.message +
+                    (saveResult ? ' — Saved ✓' : '') + '</span>';
+                card.style.borderColor = 'rgba(74, 222, 128, 0.5)';
+                card.style.boxShadow = '0 0 10px rgba(74, 222, 128, 0.15)';
+                loadTestedModels();
+            } else if (data.suggestion) {
+                // Missing prefix — show clickable suggestion
+                resultEl.innerHTML = '<span class="text-yellow-400">⚠ ' + data.error + '</span>' +
+                    '<br><button type="button" onclick="applySuggestion(\'' + providerName + '\', \'' + data.suggestion + '\')" ' +
+                    'class="mt-1 px-2 py-0.5 border border-primary/40 text-[10px] text-primary/70 hover:bg-primary/10 hover:text-primary hover:border-primary transition-all cursor-pointer">' +
+                    '→ Dùng: ' + data.suggestion + '</button>';
+                card.style.borderColor = 'rgba(250, 204, 21, 0.5)';
+                card.style.boxShadow = '0 0 10px rgba(250, 204, 21, 0.15)';
+                providerTestState[providerName] = 'fail';
+            } else if (data.key_valid) {
+                // Key valid but model not found — still auto-save the key
+                providerTestState[providerName] = 'warn';
+                const saveResult = await autoSaveProvider(providerName, apiKey, apiBase);
+                resultEl.innerHTML = '<span class="text-yellow-400">⚠ ' + data.error +
+                    (saveResult ? ' — Key saved ✓' : '') + '</span>';
+                card.style.borderColor = 'rgba(250, 204, 21, 0.5)';
+                card.style.boxShadow = '0 0 10px rgba(250, 204, 21, 0.15)';
+            } else {
+                // Key invalid or connection error
+                resultEl.innerHTML = '<span class="text-red-400">✗ ' + data.error + '</span>';
+                card.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                card.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.15)';
+                providerTestState[providerName] = 'fail';
+            }
+        } catch (e) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<span class="text-red-400">✗ Network error: ' + e.message + '</span>';
+            providerTestState[providerName] = 'fail';
+        }
+
+        // Restore button
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[14px]">bolt</span><span>Test</span>';
+
+        updateSaveButton();
+    }
+
+    function onProviderFieldChange(providerName) {
+        // Reset test result when user edits
+        const resultEl = document.getElementById('test-result-active');
+        const card = document.getElementById('provider-active-card');
+        if (resultEl) resultEl.style.display = 'none';
+        if (card) { card.style.borderColor = ''; card.style.boxShadow = ''; }
+        if (providerName) providerTestState[providerName] = 'untested';
+        updateSaveButton();
+    }
+
+    function updateSaveButton() {
+        const saveBtn = document.getElementById('save-btn');
+        if (!saveBtn) return;
+
+        // Check if any provider has a key entered but untested
+        const hasUntestedKey = Object.keys(providerTestState).some(p => providerTestState[p] === 'untested');
+        const hasFailedTest = Object.values(providerTestState).some(s => s === 'fail');
+
+        // Enable save if no untested providers with changed keys and no failures
+        const allStates = Object.values(providerTestState);
+        if (allStates.length === 0) {
+            // No provider fields changed — allow save
+            enableSave(saveBtn);
+        } else if (hasFailedTest) {
+            disableSave(saveBtn, 'Test failed — fix errors first');
+        } else if (hasUntestedKey) {
+            disableSave(saveBtn, 'Test API key before saving');
+        } else {
+            enableSave(saveBtn);
+        }
+    }
+
+    function enableSave(btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+    }
+
+    function disableSave(btn, reason) {
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
+    }
+
+    // Also reset test state when model name changes
+    const modelField = document.getElementById('model');
+    if (modelField) {
+        modelField.addEventListener('input', function () {
+            // Reset all provider test states
+            for (const p of Object.keys(providerTestState)) {
+                onProviderFieldChange(p);
+            }
+        });
+    }
+
+    // Load tested models on page load
+    loadTestedModels();
+
+    // Auto-expand gateway section if URL has #web-section
+    if (window.location.hash === '#web-section') {
+        const gatewayBody = document.getElementById('gateway-body');
+        const gatewayIcon = document.getElementById('gateway-body-icon');
+        if (gatewayBody && gatewayBody.classList.contains('hidden')) {
+            gatewayBody.classList.remove('hidden');
+            if (gatewayIcon) gatewayIcon.textContent = 'expand_less';
+        }
+        setTimeout(() => {
+            const target = document.getElementById('web-section');
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+    }
+
+    // Toggle heartbeat label
+    const hbCheckbox = document.getElementById('heartbeat_enabled');
+    const hbLabel = document.getElementById('hb-label');
+    if (hbCheckbox && hbLabel) {
+        hbCheckbox.addEventListener('change', () => {
+            hbLabel.textContent = hbCheckbox.checked ? 'ACTIVE' : 'DISABLED';
+        });
+    }
+
+    // Live password match indicator
+    const pwdConfirm = document.getElementById('web_password_confirm');
+    if (pwdConfirm) {
+        pwdConfirm.addEventListener('input', () => {
+            const pwd = document.getElementById('web_password');
+            const msg = document.getElementById('pwd-match-msg');
+            if (!msg || !pwd) return;
+            if (pwdConfirm.value === '') { msg.classList.add('hidden'); pwdConfirm.classList.remove('border-red-500', 'border-primary'); return; }
+            if (pwd.value === pwdConfirm.value) {
+                msg.textContent = '✓ Match';
+                msg.className = 'text-[10px] font-mono text-primary/60';
+                msg.classList.remove('hidden');
+                pwdConfirm.classList.remove('border-red-500');
+                pwdConfirm.classList.add('border-primary');
+            } else {
+                msg.textContent = '✗ Passwords do not match';
+                msg.className = 'text-[10px] font-mono text-red-400';
+                msg.classList.remove('hidden');
+                pwdConfirm.classList.add('border-red-500');
+                pwdConfirm.classList.remove('border-primary');
+            }
+        });
+    }
+
+    // Auto-hide toast
+    const flash = document.getElementById('flashMsg');
+    if (flash) {
+        setTimeout(() => { flash.style.animation = 'toastOut 0.4s ease-in forwards'; setTimeout(() => flash.style.display = 'none', 400); }, 3000);
+    }
+
+    // Collapsible sections
+    function toggleSection(id) {
+        const body = document.getElementById(id);
+        const icon = document.getElementById(id + '-icon');
+        if (body) {
+            body.classList.toggle('hidden');
+            if (icon) icon.textContent = body.classList.contains('hidden') ? 'expand_more' : 'expand_less';
+        }
+    }
+
+    // ── Exec Sandbox ──
+    function confirmSandboxSave() {
+        // Validate password match — only when user CHANGED the password
+        const pwd = document.getElementById('web_password');
+        const confirmPwd = document.getElementById('web_password_confirm');
+        const msg = document.getElementById('pwd-match-msg');
+        const passwordChanged = pwd && pwd.value !== (pwd.dataset.original || '');
+        if (passwordChanged && pwd.value.trim() !== '') {
+            // Password was changed — confirm must match
+            if (confirmPwd.value.trim() === '') {
+                if (msg) {
+                    msg.textContent = '✗ Please repeat the new password';
+                    msg.className = 'text-[10px] font-mono text-red-400';
+                    msg.classList.remove('hidden');
+                }
+                confirmPwd.classList.add('border-red-500');
+                confirmPwd.focus();
+                return false;
+            }
+            if (pwd.value !== confirmPwd.value) {
+                if (msg) {
+                    msg.textContent = '✗ Passwords do not match';
+                    msg.className = 'text-[10px] font-mono text-red-400';
+                    msg.classList.remove('hidden');
+                }
+                confirmPwd.classList.add('border-red-500');
+                confirmPwd.focus();
+                return false;
+            }
+            if (msg) { msg.textContent = '✓ Match'; msg.className = 'text-[10px] font-mono text-primary/60'; msg.classList.remove('hidden'); }
+            confirmPwd.classList.remove('border-red-500');
+        }
+
+
+        const mode = document.querySelector('input[name="sandbox_mode"]:checked')?.value;
+        if (mode === 'unrestricted') {
+            if (!confirm('⚠️ Chế độ "Không hạn chế" cho phép bot đọc/ghi/xóa file bất kỳ trên hệ thống.\n\nBạn chắc chắn muốn lưu?')) {
+                return false;
+            }
+        }
+        // Filter: remove unvalidated allowed_dirs before submit
+        document.querySelectorAll('.allowed-dir-row input').forEach(input => {
+            if (input.dataset.validated !== 'true') {
+                input.removeAttribute('name');  // won't be submitted
+            }
+        });
+        // Clear subdir if not validated (unless empty = default)
+        const subdirInput = document.getElementById('workspace_subdir');
+        if (subdirInput && subdirInput.value.trim() && subdirInput.dataset.validated !== 'true') {
+            subdirInput.value = '';  // reset to default
+        }
+        return true;
+    }
+    function onSandboxModeChange() {
+        const mode = document.querySelector('input[name="sandbox_mode"]:checked')?.value || 'unrestricted';
+        const subdir = document.getElementById('sandbox-subdir');
+        const warning = document.getElementById('sandbox-warning');
+        if (subdir) subdir.classList.toggle('hidden', mode !== 'workspace');
+        if (warning) warning.classList.toggle('hidden', mode !== 'unrestricted');
+        document.querySelectorAll('input[name="sandbox_mode"]').forEach(radio => {
+            const lbl = radio.closest('label');
+            if (!lbl) return;
+            if (radio.checked) {
+                lbl.classList.remove('border-primary/20', 'text-primary/50', 'hover:border-primary/50');
+                lbl.classList.add('border-primary', 'bg-primary/15', 'text-primary');
+            } else {
+                lbl.classList.remove('border-primary', 'bg-primary/15', 'text-primary');
+                lbl.classList.add('border-primary/20', 'text-primary/50', 'hover:border-primary/50');
+            }
+        });
+    }
+    // ── Tool Preset ──
+    function onToolPresetChange() {
+        const preset = document.querySelector('input[name="tool_preset"]:checked')?.value || 'developer';
+        const summary = document.getElementById('preset-summary');
+        const toggles = document.getElementById('preset-custom-toggles');
+        const content = document.getElementById('preset-summary-content');
+        if (preset === 'custom') {
+            if (summary) summary.classList.add('hidden');
+            if (toggles) toggles.classList.remove('hidden');
+        } else {
+            if (summary) summary.classList.remove('hidden');
+            if (toggles) toggles.classList.add('hidden');
+            if (content) {
+                content.textContent = preset === 'chatbot'
+                    ? 'Chỉ Message + Web + MCP — File, Exec, Spawn, Cron tắt'
+                    : 'Tất cả tools bật (File, Exec, Web, Spawn, Cron, MCP)';
+            }
+        }
+        document.querySelectorAll('input[name="tool_preset"]').forEach(radio => {
+            const lbl = radio.closest('label');
+            if (!lbl) return;
+            if (radio.checked) {
+                lbl.classList.remove('border-primary/20', 'text-primary/50', 'hover:border-primary/50');
+                lbl.classList.add('border-primary', 'bg-primary/15', 'text-primary');
+            } else {
+                lbl.classList.remove('border-primary', 'bg-primary/15', 'text-primary');
+                lbl.classList.add('border-primary/20', 'text-primary/50', 'hover:border-primary/50');
+            }
+        });
+    }
+    let _adIdx = {{ allowed_dirs | length }};
+    function addAllowedDir() {
+        const list = document.getElementById('allowed-dirs-list');
+        if (!list) return;
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 allowed-dir-row';
+        row.innerHTML = '<input type="text" name="allowed_dir_' + _adIdx + '" placeholder="D:\\\\Projects\\\\MyApp" data-validated="" class="flex-1 bg-black/60 border border-primary/20 focus:border-primary outline-none px-3 py-1.5 text-primary font-mono text-[11px] placeholder-primary/35 transition-all duration-300" /> <button type="button" onclick="checkAllowedDir(this)" class="px-2 py-1 border border-primary/40 text-primary/70 hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1" title="Kiểm tra hợp lệ"><span class="material-symbols-outlined text-[14px]">verified</span><span class="text-[9px] font-bold uppercase tracking-wider">Kiểm tra</span></button> <button type="button" onclick="removeAllowedDir(this)" class="px-1.5 py-1 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Xóa"><span class="material-symbols-outlined text-[14px]">close</span></button>';
+        list.appendChild(row);
+        _adIdx++;
+        row.querySelector('input')?.focus();
+    }
+    function removeAllowedDir(btn) {
+        btn.closest('.allowed-dir-row')?.remove();
+    }
+
+    // ── Path validation ──
+    async function _checkPath(path, mode) {
+        const resp = await fetch('/config/check-path', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, mode }),
+        });
+        return await resp.json();
+    }
+
+    function _setValidated(input, valid, btnEl) {
+        input.dataset.validated = valid ? 'true' : 'false';
+        if (valid) {
+            input.style.borderColor = '#00FF41';
+            input.style.boxShadow = '0 0 8px rgba(0,255,65,0.2)';
+        } else {
+            input.style.borderColor = '#ff6b6b';
+            input.style.boxShadow = '0 0 8px rgba(255,107,107,0.2)';
+        }
+        // Update the check button appearance
+        if (btnEl) {
+            const iconEl = btnEl.querySelector('.material-symbols-outlined');
+            if (iconEl) {
+                iconEl.textContent = valid ? 'check_circle' : 'error';
+                iconEl.style.color = valid ? '#00FF41' : '#ff6b6b';
+            }
+            // Update button border & bg
+            if (valid) {
+                btnEl.style.borderColor = '#00FF41';
+                btnEl.style.background = 'rgba(0,255,65,0.1)';
+                btnEl.style.color = '#00FF41';
+            } else {
+                btnEl.style.borderColor = '#ff6b6b';
+                btnEl.style.background = 'rgba(255,107,107,0.1)';
+                btnEl.style.color = '#ff6b6b';
+            }
+        }
+    }
+
+    function _resetValidation(input) {
+        input.dataset.validated = '';
+        input.style.borderColor = '';
+        input.style.boxShadow = '';
+        // Reset check button in the same row
+        const row = input.closest('.allowed-dir-row') || input.closest('.flex');
+        if (row) {
+            const btn = row.querySelector('button[onclick*="check"]');
+            if (btn) {
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) {
+                    icon.textContent = 'verified';
+                    icon.style.color = '';
+                }
+                btn.style.borderColor = '';
+                btn.style.background = '';
+                btn.style.color = '';
+            }
+        }
+        if (input.id === 'workspace_subdir') {
+            const r = document.getElementById('subdir-check-result');
+            if (r) r.style.display = 'none';
+        }
+    }
+
+    // Subdir: syntax check only (dir will be auto-created)
+    async function checkSubdir() {
+        const input = document.getElementById('workspace_subdir');
+        const result = document.getElementById('subdir-check-result');
+        const btn = document.getElementById('btn-check-subdir');
+        const subdir = input?.value?.trim();
+
+        if (!subdir) {
+            _setValidated(input, true, btn);
+            result.style.display = 'inline';
+            result.innerHTML = '<span style="color: #00FF41;">✓ Mặc định sandbox root</span>';
+            return;
+        }
+        const fullPath = '{{ workspace }}' + '/sandbox/' + subdir;
+        result.style.display = 'inline';
+        result.innerHTML = '<span style="color: #00FF41;">⟳ ...</span>';
+        try {
+            const resp = await fetch('/config/check-path', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: fullPath, name: subdir, mode: 'syntax' }),
+            });
+            const data = await resp.json();
+            if (data.valid) {
+                _setValidated(input, true, btn);
+                const note = data.exists ? '✓ Hợp lệ (đã tồn tại)' : '✓ Hợp lệ (sẽ tự tạo)';
+                result.innerHTML = '<span style="color: #00FF41;">' + note + '</span>';
+            } else {
+                _setValidated(input, false, btn);
+                result.innerHTML = '<span style="color: #ff6b6b;">✗ ' + data.error + '</span>';
+            }
+        } catch (e) {
+            _setValidated(input, false, btn);
+            result.innerHTML = '<span style="color: #ff6b6b;">✗ Lỗi kết nối</span>';
+        }
+    }
+
+    // Allowed dir: must exist
+    async function checkAllowedDir(btn) {
+        const row = btn.closest('.allowed-dir-row');
+        const input = row?.querySelector('input');
+        const path = input?.value?.trim();
+        if (!path) {
+            _setValidated(input, false, btn);
+            return;
+        }
+        try {
+            const data = await _checkPath(path, 'exists');
+            _setValidated(input, data.valid, btn);
+        } catch (e) {
+            _setValidated(input, false, btn);
+        }
+    }
+
+    // Reset validation when user edits
+    document.addEventListener('input', function(e) {
+        if (e.target.id === 'workspace_subdir' || e.target.closest('.allowed-dir-row')) {
+            _resetValidation(e.target);
+        }
+    });
+    // Auto-open section from URL hash (e.g. #channels-body)
+    (function() {
+        const hash = location.hash.replace('#', '');
+        if (hash) {
+            const el = document.getElementById(hash);
+            if (el && el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                const icon = document.getElementById(hash + '-icon');
+                if (icon) icon.textContent = 'expand_less';
+            }
+        }
+    })();
+
+    // Reveal/hide password fields
+    function toggleReveal(btn) {
+        const input = btn.parentElement.querySelector('input');
+        const icon = btn.querySelector('.material-symbols-outlined');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.textContent = 'visibility_off';
+        } else {
+            input.type = 'password';
+            icon.textContent = 'visibility';
+        }
+    }
+
+    // ── Help Tooltips ──
+    const helpTexts = {
+        'model': 'Tên model AI sử dụng (ví dụ: gemini/gemini-2.5-pro, gpt-4o). Đây là "bộ não" của bot.',
+        'provider': 'Nhà cung cấp AI (ví dụ: google, openai, anthropic). Quyết định API nào được gọi.',
+        'temperature': 'Độ sáng tạo của bot (0 = chính xác, 2 = sáng tạo tối đa). Nên để 0.5–0.8 cho hội thoại.',
+        'max_tokens': 'Số token tối đa mỗi lần trả lời. Token ≈ 0.75 từ tiếng Anh. Càng cao → trả lời dài hơn nhưng tốn phí.',
+        'max_tool_iterations': 'Số vòng lặp tool tối đa. Bot có thể gọi nhiều tool liên tiếp (tìm kiếm, chạy code...). Giới hạn để tránh vòng lặp vô hạn.',
+        'context_window_tokens': 'Kích thước context window (tokens). Hệ thống tự động tóm tắt lịch sử khi gần đầy. Mặc định 65536 — phù hợp hầu hết models. Tăng lên để tận dụng context dài hơn (Claude 200K, Gemini 1M...).',
+        'reasoning_effort': 'Mức độ suy luận: "low" (nhanh, rẻ), "medium" (cân bằng), "high" (sâu, tốn phí). Chỉ áp dụng cho một số model.',
+        'exec_timeout': 'Thời gian chờ tối đa (giây) khi bot chạy lệnh/code. Nếu quá thời gian → tự động dừng.',
+        'exec_path_append': 'Thêm đường dẫn vào PATH khi chạy tool. Hữu ích nếu cần truy cập chương trình ngoài.',
+        'web_proxy': 'Proxy HTTP/HTTPS để truy cập web. Định dạng: http://host:port. Để trống nếu không dùng.',
+        'search_api_key': 'API key của Brave Search. Cần thiết để bot tìm kiếm web. Đăng ký miễn phí tại brave.com/search/api.',
+        'sandbox_mode': '3 chế độ: Không hạn chế (bot toàn quyền), Giới hạn workspace (bot chỉ làm việc trong workspace), Whitelist (workspace + các thư mục chỉ định).',
+        'tool_preset': '3 preset: Developer (tất cả tools bật), Chatbot (chỉ Message + Web + MCP — an toàn cho chatbot public), Custom (toggle từng nhóm).',
+        'heartbeat_enabled': 'Cho bot tự "thức dậy" định kỳ để thực hiện các nhiệm vụ được viết trong file HEARTBEAT.md (giám sát, nhắc nhở...). ⚠ Khi bật, mỗi lần tick sẽ gọi LLM (~300 tokens) dù không có task.',
+        'heartbeat_interval': 'Khoảng thời gian (giây) giữa các lần heartbeat. Ví dụ: 3600 = mỗi 1 giờ.',
+        'web_port': 'Cổng mạng cho Web Dashboard. Mặc định: 8899. Truy cập: http://localhost:<port>',
+        'web_password': 'Mật khẩu đăng nhập Web Dashboard. Để trống = không yêu cầu đăng nhập.',
+    };
+
+    // Auto-inject (?) icons
+    document.querySelectorAll('label[for]').forEach(label => {
+        const fieldId = label.getAttribute('for');
+        if (helpTexts[fieldId]) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'inline-flex items-center justify-center w-4 h-4 ml-2 text-[8px] font-bold border border-primary/40 text-primary/50 hover:text-primary hover:border-primary rounded-full transition-all cursor-pointer align-middle';
+            btn.textContent = '?';
+            btn.onclick = function (e) { e.stopPropagation(); showHelp(this, fieldId); };
+            label.appendChild(btn);
+        }
+    });
+
+    // Checkbox labels (no 'for' attr)
+    document.querySelectorAll('.flex.flex-col.gap-2 > label:first-child').forEach(label => {
+        if (label.getAttribute('for')) return;
+        const text = label.textContent.trim();
+        let fieldId = null;
+        if (text.includes('Exec_Sandbox')) fieldId = 'sandbox_mode';
+        else if (text.includes('Heartbeat_Enabled')) fieldId = 'heartbeat_enabled';
+        if (fieldId && helpTexts[fieldId]) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'inline-flex items-center justify-center w-4 h-4 ml-2 text-[8px] font-bold border border-primary/40 text-primary/50 hover:text-primary hover:border-primary rounded-full transition-all cursor-pointer align-middle';
+            btn.textContent = '?';
+            btn.onclick = function (e) { e.stopPropagation(); showHelp(this, fieldId); };
+            label.appendChild(btn);
+        }
+    });
+
+    let activeHelp = null;
+    function showHelp(btn, fieldId) {
+        if (activeHelp) { activeHelp.remove(); activeHelp = null; }
+        const tip = document.createElement('div');
+        tip.style.cssText = 'position:absolute;left:0;right:0;top:100%;z-index:30;margin-top:4px;padding:10px 14px;background:rgba(20,15,0,0.97);border:1px solid rgba(255,200,0,0.5);box-shadow:0 4px 20px rgba(255,200,0,0.12),0 0 0 1px rgba(255,200,0,0.1);animation:helpIn 0.2s ease-out;';
+        tip.innerHTML = '<div class="flex items-start gap-2"><span class="material-symbols-outlined text-sm mt-0.5" style="color:#ffc800">info</span><p class="text-xs leading-relaxed flex-1" style="color:rgba(255,200,0,0.9)">' + helpTexts[fieldId] + '</p></div>';
+        const parent = btn.closest('.flex.flex-col');
+        parent.style.position = 'relative';
+        parent.appendChild(tip);
+        activeHelp = tip;
+        // Dismiss on click outside
+        setTimeout(() => {
+            document.addEventListener('click', function _dismiss(e) {
+                if (!tip.contains(e.target)) {
+                    tip.remove();
+                    activeHelp = null;
+                    document.removeEventListener('click', _dismiss);
+                }
+            });
+        }, 0);
+    }
+
+    async function restartGateway() {
+        const confirmed = await showMatrixConfirm(
+            'RESTART GATEWAY',
+            'Hệ thống sẽ ngắt kết nối tất cả channels và sessions.\n\n' +
+            '▸ Gateway sẽ tự khởi động lại sau 1-2 giây\n' +
+            '▸ Dashboard tự tải lại khi server sẵn sàng'
+        );
+        if (!confirmed) return;
+        window.location.href = '/restarting?next=' + encodeURIComponent('/config');
+    }
+
+    function showMatrixConfirm(title, message, confirmLabel, subtitle) {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('matrix-modal-overlay');
+            document.getElementById('matrix-modal-title').textContent = title;
+            document.getElementById('matrix-modal-message').textContent = message;
+            document.getElementById('matrix-modal-confirm-text').textContent = confirmLabel || 'CONFIRM RESTART';
+            document.getElementById('matrix-modal-subtitle').textContent = subtitle || 'SYS.RESTART';
+            overlay.classList.remove('hidden');
+            overlay._resolve = resolve;
+        });
+    }
+    function matrixModalAction(confirmed) {
+        const overlay = document.getElementById('matrix-modal-overlay');
+        overlay.classList.add('hidden');
+        if (overlay._resolve) overlay._resolve(confirmed);
+    }
+
+    // ── Channel Enable/Disable ──
+    async function toggleChannel(channel, enabled) {
+        // Special guard: block disabling Zalo while connected
+        if (channel === 'zalo' && !enabled) {
+            try {
+                const statusRes = await fetch('/zalo/status');
+                const statusData = await statusRes.json();
+                if (statusData.status === 'connected' || statusData.status === 'connecting') {
+                    const el = document.getElementById('toggle-channel-result');
+                    if (el) {
+                        el.style.display = 'inline';
+                        el.innerHTML = '<span class="text-yellow-400">⚠ Zalo đang kết nối — hãy <a href="/zalo/setup" class="underline text-primary hover:text-primary/80">ngắt kết nối</a> trước khi disable.</span>';
+                    }
+                    return;  // Block the disable
+                }
+            } catch (e) { /* if fetch fails, proceed normally */ }
+        }
+
+        if (!enabled) {
+            const ok = await showMatrixConfirm(
+                'DISABLE CHANNEL',
+                `Tắt kênh "${channel}"?\n\nKênh sẽ không hoạt động cho đến khi được bật lại.\nRestart gateway để áp dụng.`,
+                'CONFIRM DISABLE',
+                'SYS.CHANNEL'
+            );
+            if (!ok) return;
+        }
+        try {
+            const resp = await fetch('/config/toggle-channel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel, enabled }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                location.href = '/config#channels-body';  // keep section open
+                location.reload();
+            } else {
+                const el = document.getElementById('toggle-channel-result');
+                if (el) { el.style.display = 'inline'; el.innerHTML = '<span class="text-red-400">✗ ' + data.error + '</span>'; }
+            }
+        } catch (e) {
+            console.error('Toggle channel failed:', e);
+        }
+    }
+
+    function enableSelectedChannel() {
+        const sel = document.getElementById('enable-channel-select');
+        const channel = sel ? sel.value : '';
+        if (!channel) return;
+        toggleChannel(channel, true);
+    }
+
+    // ── Test Brave Search Key ──
+    async function testBraveKey() {
+        const input = document.getElementById('search_api_key');
+        const result = document.getElementById('brave-test-result');
+        const btn = document.getElementById('test-brave-btn');
+        const key = input ? input.value.trim() : '';
+
+        if (!key) {
+            result.style.display = 'inline';
+            result.innerHTML = '<span style="color: #ff6b6b;">✗ Key trống</span>';
+            return;
+        }
+
+        // Show loading
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        result.style.display = 'inline';
+        result.innerHTML = '<span style="color: #00FF41;">⟳ Testing...</span>';
+
+        try {
+            const resp = await fetch('/config/test-brave-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: key }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                result.innerHTML = '<span style="color: #00FF41;">✓ ' + data.message + '</span>';
+                // Auto save: submit the main form
+                setTimeout(() => {
+                    document.querySelector('form[action="/config"]').submit();
+                }, 800);
+            } else {
+                result.innerHTML = '<span style="color: #ff6b6b;">✗ ' + data.error + '</span>';
+            }
+        } catch (e) {
+            result.innerHTML = '<span style="color: #ff6b6b;">✗ Connection error</span>';
+        } finally {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+    }
+
+    // ── Test Telegram Token ──
+    async function testTelegramToken() {
+        const input = document.getElementById('channel_telegram_token');
+        const result = document.getElementById('telegram-test-result');
+        const btn = document.getElementById('test-telegram-btn');
+        const token = input ? input.value.trim() : '';
+
+        if (!token) {
+            result.style.display = 'inline';
+            result.innerHTML = '<span style="color: #ff6b6b;">✗ Token trống</span>';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        result.style.display = 'inline';
+        result.innerHTML = '<span style="color: #00FF41;">⟳ Testing...</span>';
+
+        try {
+            const resp = await fetch('/config/test-telegram-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                result.innerHTML = '<span style="color: #00FF41;">✓ ' + data.message + '</span>';
+                setTimeout(() => {
+                    document.querySelector('form[action="/config"]').submit();
+                }, 800);
+            } else {
+                result.innerHTML = '<span style="color: #ff6b6b;">✗ ' + data.error + '</span>';
+            }
+        } catch (err) {
+            result.innerHTML = '<span style="color: #ff6b6b;">✗ Network error</span>';
+        } finally {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+    }
+    // ══════════════════════════════════
+    // OAuth Panel: OpenAI Codex (Manual URL) & GitHub Copilot
+    // ══════════════════════════════════
+    let _codexSessionId = null;
+    let _copilotSessionId = null;
+    let _copilotPollTimer = null;
+    let _copilotPollInterval = 5;
+
+    function oauthPanelUpdate(providerName) {
+        const panel = document.getElementById('oauth-panel');
+        const codexSection = document.getElementById('oauth-codex-section');
+        const copilotSection = document.getElementById('oauth-copilot-section');
+        if (!panel) return;
+        const isOAuth = (providerName === 'openai_codex' || providerName === 'github_copilot');
+        const keyRow = document.getElementById('active-provider-key')?.closest('.flex-col');
+        const baseRow = document.getElementById('active-provider-base')?.closest('.flex-col');
+        const testModelRow = document.getElementById('active-provider-model')?.closest('.mt-2');
+        const btnTest = document.getElementById('btn-test-active');
+        if (keyRow) keyRow.style.display = isOAuth ? 'none' : '';
+        if (baseRow) baseRow.style.display = isOAuth ? 'none' : '';
+        if (testModelRow) testModelRow.style.display = isOAuth ? 'none' : '';
+        if (btnTest) btnTest.style.display = isOAuth ? 'none' : '';
+        if (providerName === 'openai_codex') {
+            panel.classList.remove('hidden');
+            if (codexSection) codexSection.classList.remove('hidden');
+            if (copilotSection) copilotSection.classList.add('hidden');
+            codexCheckStatus();
+        } else if (providerName === 'github_copilot') {
+            panel.classList.remove('hidden');
+            if (codexSection) codexSection.classList.add('hidden');
+            if (copilotSection) copilotSection.classList.remove('hidden');
+            copilotCheckStatus();
+        } else {
+            panel.classList.add('hidden');
+            if (codexSection) codexSection.classList.add('hidden');
+            if (copilotSection) copilotSection.classList.add('hidden');
+        }
+    }
+
+    // -- Codex --
+    async function codexCheckStatus() {
+        try { const r = await fetch('/oauth/codex/status'); const d = await r.json(); _codexSetState(d.logged_in, d.account_id); }
+        catch (e) { _codexSetState(false); }
+    }
+    function _codexSetState(loggedIn, accountId) {
+        const loginArea = document.getElementById('codex-login-area');
+        const loggedArea = document.getElementById('codex-logged-area');
+        if (loginArea) loginArea.style.display = loggedIn ? 'none' : '';
+        if (loggedArea) loggedArea.classList.toggle('hidden', !loggedIn);
+        if (loggedIn) {
+            const accEl = document.getElementById('codex-account-id');
+            if (accEl) accEl.textContent = accountId ? '(' + accountId + ')' : '';
+        } else {
+            const urlStep = document.getElementById('codex-url-step');
+            if (urlStep) urlStep.classList.add('hidden');
+            const cbInput = document.getElementById('codex-callback-url');
+            if (cbInput) cbInput.value = '';
+            const res = document.getElementById('codex-callback-result');
+            if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+        }
+    }
+    async function codexStartLogin() {
+        try {
+            const r = await fetch('/oauth/codex/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+            const d = await r.json();
+            if (!d.success) { alert('Error: ' + (d.error || 'Unknown')); return; }
+            _codexSessionId = d.session_id;
+            const urlInput = document.getElementById('codex-auth-url');
+            if (urlInput) urlInput.value = d.url;
+            const urlStep = document.getElementById('codex-url-step');
+            if (urlStep) urlStep.classList.remove('hidden');
+        } catch (e) { alert('Network error: ' + e); }
+    }
+    function codexCopyUrl() {
+        const url = document.getElementById('codex-auth-url') ? document.getElementById('codex-auth-url').value : '';
+        if (url) navigator.clipboard.writeText(url).catch(function() {});
+    }
+    async function codexSubmitCallback() {
+        const callbackUrl = (document.getElementById('codex-callback-url') ? document.getElementById('codex-callback-url').value : '').trim();
+        const result = document.getElementById('codex-callback-result');
+        if (!callbackUrl) { if (result) { result.style.display='block'; result.innerHTML='<span style="color:#ff6b6b">✗ Paste callback URL trước</span>'; } return; }
+        if (!_codexSessionId) { if (result) { result.style.display='block'; result.innerHTML='<span style="color:#ff6b6b">✗ Session hết hạn, nhấn Generate lại</span>'; } return; }
+        if (result) { result.style.display='block'; result.innerHTML='<span style="color:#00FF41">⟳ Đang xác nhận...</span>'; }
+        try {
+            const r = await fetch('/oauth/codex/callback', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: _codexSessionId, callback_url: callbackUrl }) });
+            const d = await r.json();
+            if (d.success) { if (result) result.innerHTML='<span style="color:#00FF41">✓ Đăng nhập thành công!</span>'; setTimeout(function() { codexCheckStatus(); }, 800); }
+            else { if (result) result.innerHTML='<span style="color:#ff6b6b">✗ ' + (d.error || 'Lỗi không xác định') + '</span>'; }
+        } catch (e) { if (result) result.innerHTML='<span style="color:#ff6b6b">✗ Network error</span>'; }
+    }
+    async function codexLogout() {
+        await fetch('/oauth/codex/logout', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+        _codexSetState(false);
+    }
+
+    // -- Copilot --
+    async function copilotCheckStatus() {
+        try { const r = await fetch('/oauth/copilot/status'); const d = await r.json(); _copilotSetState(d.logged_in); }
+        catch (e) { _copilotSetState(false); }
+    }
+    function _copilotSetState(loggedIn) {
+        const loginArea = document.getElementById('copilot-login-area');
+        const loggedArea = document.getElementById('copilot-logged-area');
+        if (loginArea) loginArea.style.display = loggedIn ? 'none' : '';
+        if (loggedArea) loggedArea.classList.toggle('hidden', !loggedIn);
+        if (!loggedIn) {
+            const devStep = document.getElementById('copilot-device-step');
+            if (devStep) devStep.classList.add('hidden');
+            _stopCopilotPoll();
+        }
+    }
+    async function copilotStartLogin() {
+        try {
+            const r = await fetch('/oauth/copilot/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+            const d = await r.json();
+            if (!d.success) { alert('Error: ' + (d.error || 'Unknown')); return; }
+            _copilotSessionId = d.session_id;
+            _copilotPollInterval = d.interval || 5;
+            const verifyLink = document.getElementById('copilot-verify-url');
+            if (verifyLink) { verifyLink.href = d.verification_uri; verifyLink.textContent = d.verification_uri; }
+            const codeEl = document.getElementById('copilot-user-code');
+            if (codeEl) codeEl.textContent = d.user_code;
+            const devStep = document.getElementById('copilot-device-step');
+            if (devStep) devStep.classList.remove('hidden');
+            const pollStatus = document.getElementById('copilot-poll-status');
+            if (pollStatus) pollStatus.textContent = 'Đang chờ xác nhận...';
+            _startCopilotPoll();
+        } catch (e) { alert('Network error: ' + e); }
+    }
+    function _startCopilotPoll() {
+        _stopCopilotPoll();
+        _copilotPollTimer = setInterval(_copilotDoPoll, _copilotPollInterval * 1000);
+    }
+    function _stopCopilotPoll() {
+        if (_copilotPollTimer) { clearInterval(_copilotPollTimer); _copilotPollTimer = null; }
+    }
+    async function _copilotDoPoll() {
+        if (!_copilotSessionId) { _stopCopilotPoll(); return; }
+        try {
+            const r = await fetch('/oauth/copilot/poll', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: _copilotSessionId }) });
+            const d = await r.json();
+            const pollStatus = document.getElementById('copilot-poll-status');
+            if (d.success && d.done) { _stopCopilotPoll(); if (pollStatus) pollStatus.textContent = '✓ Đã xác nhận!'; setTimeout(function() { copilotCheckStatus(); }, 800); }
+            else if (d.done) { _stopCopilotPoll(); if (pollStatus) pollStatus.textContent = '✗ ' + (d.error || 'Thất bại'); }
+            else if (d.slow_down) { _copilotPollInterval += 5; _startCopilotPoll(); }
+        } catch (e) { /* ignore */ }
+    }
+    async function copilotLogout() {
+        _stopCopilotPoll();
+        await fetch('/oauth/copilot/logout', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+        _copilotSetState(false);
+    }
+</script>
+
+<!-- Matrix Confirm Modal -->
+<div id="matrix-modal-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);">
+    <div class="border border-red-500/50 bg-black/95 max-w-md w-full mx-4 shadow-[0_0_40px_rgba(255,0,0,0.15)] animate-modalIn">
+        <!-- Header -->
+        <div class="flex items-center gap-3 px-5 py-3 border-b border-red-500/30 bg-red-500/5">
+            <span class="material-symbols-outlined text-red-400 text-lg">warning</span>
+            <span id="matrix-modal-title" class="text-red-400 font-bold uppercase tracking-[0.3em] text-xs">CONFIRM</span>
+            <span id="matrix-modal-subtitle" class="ml-auto text-red-500/30 text-[9px] font-mono">SYS.RESTART</span>
+        </div>
+        <!-- Body -->
+        <div class="px-5 py-5">
+            <pre id="matrix-modal-message" class="text-primary/80 text-[11px] font-mono leading-relaxed whitespace-pre-wrap"></pre>
+        </div>
+        <!-- Footer -->
+        <div class="flex items-center gap-3 px-5 py-3 border-t border-red-500/20 bg-red-500/5">
+            <button onclick="matrixModalAction(true)"
+                class="px-6 py-2 border border-red-500/60 bg-red-500/10 text-red-400 font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-red-500 hover:text-black transition-all duration-200 flex items-center gap-2">
+                <span class="material-symbols-outlined text-xs">restart_alt</span>
+                <span id="matrix-modal-confirm-text">CONFIRM RESTART</span>
+            </button>
+            <button onclick="matrixModalAction(false)"
+                class="px-6 py-2 border border-primary/20 bg-primary/5 text-primary/60 font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-primary/20 hover:text-primary transition-all duration-200">
+                CANCEL
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes helpIn {
+        from {
+            opacity: 0;
+            transform: translateY(-4px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes modalIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95) translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+    }
+    .animate-modalIn {
+        animation: modalIn 0.2s ease-out;
+    }
+</style>
+{% endblock %}

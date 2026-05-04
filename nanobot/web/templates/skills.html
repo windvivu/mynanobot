@@ -1,0 +1,1053 @@
+{% extends "base.html" %}
+
+{% block title %}Skills — Nanobot OS{% endblock %}
+
+{% block content %}
+<!-- Sidebar -->
+<aside class="w-full lg:w-72 flex flex-col gap-6">
+    <div class="matrix-card p-6 flex flex-col items-center text-center gap-4">
+        <div
+            class="w-20 h-20 flex items-center justify-center text-primary glow-text border-2 border-primary/30 rounded-full relative">
+            <div class="absolute inset-0 border border-primary animate-pulse rounded-full opacity-20"></div>
+            <span class="material-symbols-outlined text-4xl">extension</span>
+        </div>
+        <div>
+            <h2 class="text-lg font-bold glow-text tracking-widest uppercase">Skills_DB</h2>
+            <p class="text-[10px] text-primary/50 font-mono">{{ total }} SKILLS LOADED</p>
+        </div>
+    </div>
+
+    {% set active_page = "skills" %}
+    {% include "_sidebar_nav.html" %}
+</aside>
+
+<!-- Main Content -->
+<div class="flex-1 flex flex-col gap-4">
+
+    <!-- Tab Header -->
+    <div class="matrix-card p-1 flex gap-1">
+        <button id="tab-installed-btn" onclick="switchTab('installed')"
+            class="flex-1 px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest rounded transition-all flex items-center justify-center gap-2 tab-active">
+            <span class="material-symbols-outlined text-sm">extension</span>Skills ({{ total }})
+        </button>
+        <button id="tab-hub-btn" onclick="switchTab('hub')"
+            class="flex-1 px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest rounded transition-all flex items-center justify-center gap-2 tab-inactive">
+            <span class="material-symbols-outlined text-sm">travel_explore</span>ClawHub
+        </button>
+        <button id="tab-mcp-btn" onclick="switchTab('mcp')"
+            class="flex-1 px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest rounded transition-all flex items-center justify-center gap-2 tab-inactive">
+            <span class="material-symbols-outlined text-sm">hub</span>MCP ({{ mcp_servers|length }})
+        </button>
+    </div>
+
+    <!-- ========== TAB 1: Installed Skills ========== -->
+    <div id="tab-installed" class="flex flex-col gap-4">
+        {% if skills %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for skill in skills %}
+            <div class="matrix-card p-5 flex flex-col gap-3 group" id="skill-card-{{ skill.name }}">
+                <div class="flex items-center justify-between">
+                    <a href="/skills/{{ skill.name }}" class="flex items-center gap-3 flex-1">
+                        <span
+                            class="material-symbols-outlined text-sm {{ 'text-primary glow-text' if skill.available else 'text-primary/30' }}">
+                            {{ 'check_circle' if skill.available else ('toggle_off' if skill.manually_disabled else 'cancel') }}
+                        </span>
+                        <span
+                            class="text-sm font-bold uppercase tracking-widest {{ 'text-primary' if skill.available else 'text-primary/40' }}">{{
+                            skill.name }}</span>
+                    </a>
+                    <div class="flex items-center gap-2">
+                        {% if skill.meets_requirements %}
+                        <button onclick="toggleSkill('{{ skill.name }}')"
+                            class="skill-toggle-btn px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border rounded transition-all
+                                {{ 'border-primary/40 text-primary hover:bg-primary/10' if skill.available else 'border-red-400/40 text-red-400 hover:bg-red-400/10' }}"
+                            title="{{ 'Click to disable' if skill.available else 'Click to enable' }}">
+                            {{ 'ON' if skill.available else 'OFF' }}
+                        </button>
+                        {% endif %}
+                        <span
+                            class="text-[9px] font-mono px-2 py-0.5 border {{ 'border-primary/30 text-primary/50' if skill.source == 'workspace' else 'border-primary/15 text-primary/30' }}">
+                            {{ skill.source | upper }}
+                        </span>
+                    </div>
+                </div>
+                {% if skill.description %}
+                <p class="text-[11px] text-primary/50 leading-relaxed">{{ skill.description }}</p>
+                {% endif %}
+
+                {# Auto-disabled: system requirements not met #}
+                {% if not skill.meets_requirements %}
+                <div class="flex flex-col mt-1 border border-red-500/30 bg-red-500/5 rounded overflow-hidden">
+                    <div class="flex items-center gap-1.5 px-2.5 py-2 text-[10px] text-red-400 font-bold uppercase tracking-wider cursor-pointer select-none skill-disable-toggle"
+                         onclick="event.preventDefault(); event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                        <span class="material-symbols-outlined text-[12px]">block</span>
+                        <span>Auto-disabled</span>
+                        <span class="material-symbols-outlined text-[10px] ml-auto transition-transform skill-chevron">expand_more</span>
+                    </div>
+                    <div class="skill-disable-details">
+                        <div class="flex flex-col gap-1.5 px-2.5 pb-2.5">
+                            {% if skill.missing_reason %}
+                            <div class="text-[10px] text-red-300/80 font-mono leading-relaxed">
+                                {{ skill.missing_reason }}
+                            </div>
+                            {% endif %}
+                            {% if skill.install_hint %}
+                            <div class="flex items-start gap-1.5 mt-0.5">
+                                <span class="text-[9px] text-red-400/50 uppercase tracking-wider mt-0.5 shrink-0">Fix:</span>
+                                <div class="text-[9px] text-red-300/60 font-mono">{{ skill.install_hint }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# Manually disabled indicator #}
+                {% if skill.manually_disabled and skill.meets_requirements %}
+                <div class="flex items-center gap-1.5 mt-1 px-2.5 py-1.5 border border-yellow-500/30 bg-yellow-500/5 rounded text-[10px] text-yellow-400/80">
+                    <span class="material-symbols-outlined text-[12px]">toggle_off</span>
+                    <span>Manually disabled — click <b>OFF</b> to re-enable</span>
+                </div>
+                {% endif %}
+
+                <div class="flex items-center gap-3">
+                    <a href="/skills/{{ skill.name }}"
+                        class="flex items-center gap-2 text-[10px] font-bold text-primary/70 hover:text-primary transition-colors tracking-wider uppercase">
+                        <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
+                        <span>VIEW SKILL.md</span>
+                    </a>
+                    {% if skill.source == 'workspace' and not skill.has_builtin %}
+                    <button onclick="event.preventDefault(); event.stopPropagation(); deleteSkill('{{ skill.name }}')"
+                        class="flex items-center gap-1 text-[10px] font-bold text-red-400/50 hover:text-red-400 transition-colors tracking-wider uppercase ml-auto">
+                        <span class="material-symbols-outlined text-[12px]">delete</span>
+                        <span>DELETE</span>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="matrix-card p-12 flex flex-col items-center text-center gap-4">
+            <span class="material-symbols-outlined text-6xl text-primary/20">extension_off</span>
+            <h3 class="text-sm font-bold uppercase tracking-widest text-primary/40">No Skills</h3>
+            <p class="text-[10px] text-primary/20">No skills found in workspace or builtin directories</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ========== TAB 2: ClawHub Marketplace ========== -->
+    <div id="tab-hub" class="hidden flex flex-col gap-4">
+        <!-- Search Bar -->
+        <div class="matrix-card p-4">
+            <div class="flex gap-2">
+                <input id="hub-query" type="text" placeholder="Search skills... (e.g. web scraping, weather, database)"
+                    class="flex-1 bg-transparent border border-primary/30 rounded px-3 py-2.5 text-xs text-primary font-mono outline-none focus:border-primary/60 transition-colors placeholder:text-primary/20"
+                    onkeydown="if(event.key==='Enter') hubSearch()">
+                <button onclick="hubSearch()"
+                    class="px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider border border-primary/50 text-primary hover:bg-primary/10 rounded transition-all flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[14px]">search</span>Search
+                </button>
+                <button onclick="document.getElementById('zip-upload').click()"
+                    class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider border border-yellow-400/40 text-yellow-400/70 hover:text-yellow-400 hover:bg-yellow-400/10 rounded transition-all flex items-center gap-2"
+                    title="Install skill from .zip file">
+                    <span class="material-symbols-outlined text-[14px]">upload_file</span>ZIP
+                </button>
+                <input type="file" id="zip-upload" accept=".zip" class="hidden" onchange="hubUploadZip(this)">
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="hub-loading" class="hidden matrix-card p-8 flex flex-col items-center gap-3">
+            <span class="material-symbols-outlined text-3xl text-primary animate-spin">progress_activity</span>
+            <p class="text-[10px] text-primary/50 font-mono">Searching ClawHub registry...</p>
+        </div>
+
+        <!-- Results Grid -->
+        <div id="hub-results-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+
+        <!-- No Results -->
+        <div id="hub-no-results" class="hidden matrix-card p-8 flex flex-col items-center gap-3">
+            <span class="material-symbols-outlined text-3xl text-primary/20">search_off</span>
+            <p class="text-[10px] text-primary/30 font-mono">No skills found. Try different keywords.</p>
+        </div>
+
+        <!-- Error -->
+        <div id="hub-error" class="hidden matrix-card p-4 border border-red-500/30 bg-red-500/5">
+            <p class="text-[10px] text-red-400 font-mono" id="hub-error-text"></p>
+        </div>
+
+        <!-- Placeholder when no search yet -->
+        <div id="hub-placeholder" class="matrix-card p-10 flex flex-col items-center gap-4 text-center">
+            <span class="material-symbols-outlined text-5xl text-primary/15">travel_explore</span>
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-widest text-primary/30 mb-1">ClawHub Skill Registry</h3>
+                <p class="text-[10px] text-primary/20 font-mono">Search by keyword to find and install community skills</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== TAB 3: MCP Servers ========== -->
+    <div id="tab-mcp" class="hidden flex flex-col gap-4">
+
+        <!-- Presets -->
+        <div class="matrix-card p-4">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="material-symbols-outlined text-sm text-primary/50">bolt</span>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-primary/50">Quick Add Presets</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="mcpAddPreset('playwright')" class="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-primary/30 text-primary/60 hover:text-primary hover:bg-primary/10 hover:border-primary/60 rounded transition-all flex flex-col items-center gap-0.5">
+                    <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[14px]">web</span>Playwright (Headless)</span>
+                    <span class="text-[7px] normal-case tracking-normal text-primary/30">Required for Docker</span>
+                </button>
+                <button onclick="mcpAddPreset('playwright_headed')" class="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-primary/30 text-primary/60 hover:text-primary hover:bg-primary/10 hover:border-primary/60 rounded transition-all flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[14px]">desktop_windows</span>Playwright (Visible)
+                </button>
+                <button onclick="mcpToggleAddForm()" class="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-yellow-400/30 text-yellow-400/60 hover:text-yellow-400 hover:bg-yellow-400/10 hover:border-yellow-400/60 rounded transition-all flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[14px]">add</span>Custom
+                </button>
+            </div>
+        </div>
+
+        <!-- Add Form (hidden by default) -->
+        <div id="mcp-add-form" class="hidden matrix-card p-5">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-[11px] font-bold uppercase tracking-widest text-primary">Add MCP Server</span>
+                <button onclick="mcpToggleAddForm()" class="text-primary/30 hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold uppercase tracking-wider text-primary/60">Name (slug)</label>
+                    <input type="text" id="mcp-name" placeholder="e.g. browser" class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold uppercase tracking-wider text-primary/60">Type</label>
+                    <select id="mcp-type" class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all appearance-none cursor-pointer" onchange="mcpTypeChanged()">
+                        <option value="stdio" style="background:#0a0a0a;color:#00FF41">stdio (command)</option>
+                        <option value="sse" style="background:#0a0a0a;color:#00FF41">sse (http)</option>
+                        <option value="streamableHttp" style="background:#0a0a0a;color:#00FF41">streamableHttp</option>
+                    </select>
+                </div>
+                <div id="mcp-stdio-fields" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[9px] font-bold uppercase tracking-wider text-primary/60">Command</label>
+                        <input type="text" id="mcp-command" placeholder="e.g. npx" class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[9px] font-bold uppercase tracking-wider text-primary/60">Args (comma-separated)</label>
+                        <input type="text" id="mcp-args" placeholder="e.g. -y, @playwright/mcp@latest, --headless" class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all">
+                    </div>
+                </div>
+                <div id="mcp-http-fields" class="hidden md:col-span-2">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[9px] font-bold uppercase tracking-wider text-primary/60">URL</label>
+                        <input type="text" id="mcp-url" placeholder="e.g. http://localhost:3000/sse" class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all">
+                    </div>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold uppercase tracking-wider text-primary/60">Tool Timeout (seconds)</label>
+                    <input type="number" id="mcp-timeout" value="30" min="5" max="300" class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold uppercase tracking-wider text-primary/60">Env Vars (KEY=VALUE, one per line)</label>
+                    <textarea id="mcp-env" rows="2" placeholder="API_KEY=xxx" class="bg-black/60 border border-primary/30 focus:border-primary outline-none px-3 py-2 text-primary font-mono text-xs transition-all resize-none"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end mt-4">
+                <button onclick="mcpSubmitAdd()" class="px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider border border-primary/50 text-primary hover:bg-primary/10 rounded transition-all flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[14px]">add_circle</span>Add Server
+                </button>
+            </div>
+        </div>
+
+        <!-- Server Cards -->
+        {% if mcp_servers %}
+        <div class="flex flex-col gap-3">
+            {% for name, srv in mcp_servers.items() %}
+            <div class="matrix-card p-4" id="mcp-card-{{ name }}">
+                <div class="flex items-center gap-3 mb-2">
+                    <span id="mcp-dot-{{ name }}" class="w-2 h-2 rounded-full bg-primary/20 transition-all duration-500" title="Checking..."></span>
+                    <span class="text-sm font-bold uppercase tracking-widest text-primary">{{ name }}</span>
+                    <span class="text-[9px] font-mono px-2 py-0.5 border border-primary/20 text-primary/40">{{ srv.type }}</span>
+                    <span id="mcp-tools-{{ name }}" class="text-[9px] font-mono text-primary/20 hidden"></span>
+                    <div class="ml-auto flex gap-2">
+                        <button onclick="mcpEdit('{{ name }}')" class="text-[9px] font-bold uppercase tracking-wider text-primary/40 hover:text-primary transition-colors flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[12px]">edit</span>Edit
+                        </button>
+                        <button onclick="mcpDelete('{{ name }}')" class="text-[9px] font-bold uppercase tracking-wider text-red-400/40 hover:text-red-400 transition-colors flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[12px]">delete</span>Delete
+                        </button>
+                    </div>
+                </div>
+                <div class="text-[11px] font-mono text-primary/60 leading-relaxed">
+                    {% if srv.command %}
+                    <code class="block whitespace-pre-wrap break-all">{{ srv.command }} {{ srv.args | join(' ') }}</code>
+                    {% else %}
+                    <code class="block whitespace-pre-wrap break-all">{{ srv.url }}</code>
+                    {% endif %}
+                </div>
+                <div class="flex gap-4 mt-2 text-[9px] font-mono text-primary/30">
+                    <span>Timeout: {{ srv.tool_timeout }}s</span>
+                    <span>Tools: {{ srv.enabled_tools | join(', ') }}</span>
+                    {% if srv.env %}<span>Env: {{ srv.env | length }} vars</span>{% endif %}
+                </div>
+            </div>
+
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="matrix-card p-10 flex flex-col items-center gap-4 text-center">
+            <span class="material-symbols-outlined text-5xl text-primary/15">hub</span>
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-widest text-primary/30 mb-1">No MCP Servers</h3>
+                <p class="text-[10px] text-primary/20 font-mono">Use presets above or add a custom MCP server</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="flex items-center gap-3">
+            <span class="text-[9px] text-yellow-400/50 font-mono flex items-center gap-1">
+                <span class="material-symbols-outlined text-[12px]">info</span>
+                Changes require gateway restart to take effect
+            </span>
+            <button onclick="mcpRestartGateway()" id="mcp-restart-btn"
+                class="px-4 py-1.5 text-[9px] font-bold uppercase tracking-wider border border-red-500/40 text-red-400/60 hover:bg-red-500/10 hover:border-red-500 hover:text-red-400 rounded transition-all flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[12px]">restart_alt</span>Restart Gateway
+            </button>
+        </div>
+    </div>
+
+    <!-- Terminal Footer -->
+    <div class="matrix-card p-4 font-mono text-[11px] leading-tight space-y-1 mt-auto">
+        <div class="flex gap-2">
+            <span class="text-primary/40">[SKL]</span>
+            <span class="text-primary">Skills scan complete... <span class="text-white">{{ total }} LOADED</span></span>
+        </div>
+        <div class="flex gap-2">
+            <span class="text-primary/40">[SKL]</span>
+            <span class="text-primary">Sources: workspace + builtin | Path: {{ workspace }}/skills/</span>
+        </div>
+        <div class="flex gap-2 pt-2 border-t border-primary/10 mt-2">
+            <span class="text-primary/60">$</span>
+            <span class="text-primary cursor-default">root@nanobot_os:/skills# <span
+                    class="bg-primary text-black ml-1 px-1"> </span></span>
+        </div>
+    </div>
+</div>
+
+<!-- Hub Confirm Modal -->
+<div id="hub-modal" class="hub-modal-overlay">
+    <div class="hub-modal-box rounded p-6 flex flex-col gap-4">
+        <div class="flex items-center gap-3">
+            <span id="hub-modal-icon" class="material-symbols-outlined text-2xl text-primary glow-text">help</span>
+            <h3 id="hub-modal-title" class="text-sm font-bold uppercase tracking-widest text-primary glow-text">Confirm</h3>
+        </div>
+        <p id="hub-modal-body" class="text-xs text-primary/70 font-mono leading-relaxed"></p>
+        <div class="flex gap-3 justify-end mt-1">
+            <button onclick="hubModalClose()"
+                class="px-4 py-2 text-[10px] font-bold uppercase tracking-wider border border-primary/30 text-primary/50 hover:text-primary hover:border-primary/60 rounded transition-all">
+                Cancel
+            </button>
+            <button id="hub-modal-btn" onclick="hubModalConfirm()"
+                class="px-4 py-2 text-[10px] font-bold uppercase tracking-wider border border-primary/60 text-primary hover:bg-primary/10 rounded transition-all">
+                Confirm
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MCP Edit Modal -->
+<div id="mcp-edit-modal" class="hub-modal-overlay" onclick="if(event.target===this)mcpEditClose()">
+    <div class="hub-modal-box rounded p-6 flex flex-col gap-4" style="min-width:400px;max-width:540px">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-2xl text-primary glow-text">settings</span>
+                <h3 id="mcp-edit-title" class="text-sm font-bold uppercase tracking-widest text-primary glow-text">Server</h3>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="mcp-edit-badge" class="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 border rounded"></span>
+                <button onclick="mcpEditClose()" class="text-primary/30 hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+            <!-- Type -->
+            <div class="flex flex-col gap-1">
+                <label class="text-[8px] font-bold uppercase tracking-wider text-primary/40">Type</label>
+                <select id="mcp-edit-type" class="bg-black/60 border border-primary/20 px-3 py-2 text-primary/60 font-mono text-xs outline-none transition-all appearance-none" onchange="mcpEditTypeChanged()">
+                    <option value="stdio" style="background:#0a0a0a;color:#00FF41">stdio</option>
+                    <option value="sse" style="background:#0a0a0a;color:#00FF41">sse</option>
+                    <option value="streamableHttp" style="background:#0a0a0a;color:#00FF41">streamableHttp</option>
+                </select>
+            </div>
+
+            <!-- Command (stdio) -->
+            <div id="mcp-edit-cmd-row" class="flex flex-col gap-1">
+                <label class="text-[8px] font-bold uppercase tracking-wider text-primary/40">Command</label>
+                <input type="text" id="mcp-edit-command" class="bg-black/60 border border-primary/20 px-3 py-2 text-primary/60 font-mono text-xs outline-none transition-all">
+            </div>
+            <div id="mcp-edit-args-row" class="flex flex-col gap-1">
+                <label class="text-[8px] font-bold uppercase tracking-wider text-primary/40">Args (comma-separated)</label>
+                <input type="text" id="mcp-edit-args" class="bg-black/60 border border-primary/20 px-3 py-2 text-primary/60 font-mono text-xs outline-none transition-all">
+            </div>
+
+            <!-- URL (sse/http) -->
+            <div id="mcp-edit-url-row" class="flex flex-col gap-1 hidden">
+                <label class="text-[8px] font-bold uppercase tracking-wider text-primary/40">URL</label>
+                <input type="text" id="mcp-edit-url" class="bg-black/60 border border-primary/20 px-3 py-2 text-primary/60 font-mono text-xs outline-none transition-all">
+            </div>
+
+            <!-- Env -->
+            <div class="flex flex-col gap-1">
+                <label class="text-[8px] font-bold uppercase tracking-wider text-primary/40">Env Vars (KEY=VALUE, one per line)</label>
+                <textarea id="mcp-edit-env" rows="2" class="bg-black/60 border border-primary/20 px-3 py-2 text-primary/60 font-mono text-xs outline-none transition-all resize-none"></textarea>
+            </div>
+
+            <!-- Timeout -->
+            <div class="flex flex-col gap-1">
+                <label class="text-[8px] font-bold uppercase tracking-wider text-primary/40">Tool Timeout (seconds)</label>
+                <input type="number" id="mcp-edit-timeout" min="5" max="300"
+                    class="bg-black/60 border border-primary/20 px-3 py-2 text-primary font-mono text-xs outline-none transition-all w-32">
+            </div>
+        </div>
+
+        <div class="flex gap-3 justify-end mt-1">
+            <button onclick="mcpEditClose()"
+                class="px-4 py-2 text-[10px] font-bold uppercase tracking-wider border border-primary/30 text-primary/50 hover:text-primary hover:border-primary/60 rounded transition-all">
+                Cancel
+            </button>
+            <button id="mcp-edit-save-btn" onclick="mcpEditSave()"
+                class="px-4 py-2 text-[10px] font-bold uppercase tracking-wider border border-primary/60 text-primary hover:bg-primary/10 rounded transition-all">
+                Save
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .crt-overlay,
+    .crt-scanline {
+        display: none !important;
+    }
+
+    /* Tab styles */
+    .tab-active {
+        background: rgba(var(--color-primary-rgb, 0,255,65), 0.12);
+        color: var(--color-primary, #00FF41);
+        border: 1px solid rgba(var(--color-primary-rgb, 0,255,65), 0.3);
+    }
+    .tab-inactive {
+        background: transparent;
+        color: rgba(var(--color-primary-rgb, 0,255,65), 0.35);
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+    .tab-inactive:hover {
+        color: rgba(var(--color-primary-rgb, 0,255,65), 0.6);
+        background: rgba(var(--color-primary-rgb, 0,255,65), 0.04);
+    }
+
+    /* Collapsible disabled-skill details */
+    .skill-disable-details {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.25s ease;
+    }
+    .expanded .skill-disable-details {
+        max-height: 120px;
+    }
+    .expanded .skill-chevron {
+        transform: rotate(180deg);
+    }
+    .skill-disable-toggle:hover {
+        background: rgba(239, 68, 68, 0.08);
+    }
+
+    /* Hub modal */
+    .hub-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        align-items: center;
+        justify-content: center;
+    }
+    .hub-modal-overlay.open {
+        display: flex;
+    }
+    .hub-modal-box {
+        border: 1px solid var(--color-primary, #00FF41);
+        box-shadow: 0 0 30px rgba(0,255,65,0.25);
+        background: #141414;
+        min-width: 320px;
+        max-width: 440px;
+        animation: hub-modal-in 0.15s ease;
+    }
+    @keyframes hub-modal-in {
+        from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+</style>
+<script>
+// Tab switching
+function switchTab(tab) {
+    var tabs = ['installed', 'hub', 'mcp'];
+    tabs.forEach(function(t) {
+        var panel = document.getElementById('tab-' + t);
+        var btn = document.getElementById('tab-' + t + '-btn');
+        if (t === tab) {
+            panel.classList.remove('hidden');
+            btn.className = btn.className.replace('tab-inactive', 'tab-active');
+        } else {
+            panel.classList.add('hidden');
+            btn.className = btn.className.replace('tab-active', 'tab-inactive');
+        }
+    });
+    if (tab === 'hub') {
+        setTimeout(function() { var q = document.getElementById('hub-query'); if(q) q.focus(); }, 100);
+    }
+    if (tab === 'mcp') {
+        setTimeout(mcpPollStatus, 200);
+    }
+    // Remember active tab in URL hash
+    window.location.hash = tab;
+}
+// Auto-switch to tab from URL hash on page load
+(function() {
+    var hash = window.location.hash.replace('#', '');
+    if (['hub', 'mcp'].indexOf(hash) >= 0) switchTab(hash);
+})();
+
+// ── MCP Functions ──
+var MCP_PRESETS = {
+    playwright: {
+        name: 'browser',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@playwright/mcp@latest', '--headless', '--output-dir', '.workspace/sandbox/browser-logs', '--user-data-dir', '.workspace/sandbox/browser-data'],
+        tool_timeout: 60
+    },
+    playwright_headed: {
+        name: 'browser',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@playwright/mcp@latest', '--output-dir', '.workspace/sandbox/browser-logs', '--user-data-dir', '.workspace/sandbox/browser-data'],
+        tool_timeout: 60
+    }
+};
+
+function mcpAddPreset(preset) {
+    var p = MCP_PRESETS[preset];
+    if (!p) return;
+    hubModal('add_circle', 'Add ' + p.name, 'Add MCP server "' + p.name + '" (' + p.command + ' ' + p.args.join(' ') + ')?', async function() {
+        try {
+            var resp = await fetch('/skills/mcp/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(p)
+            });
+            var data = await resp.json();
+            if (data.success) {
+                hubModal('check_circle', 'Added!', data.message, function() { window.location.reload(); });
+            } else {
+                hubModal('error', 'Error', data.error, function(){});
+            }
+        } catch (err) {
+            hubModal('error', 'Error', 'Network error: ' + err.message, function(){});
+        }
+    });
+}
+
+function mcpToggleAddForm() {
+    var form = document.getElementById('mcp-add-form');
+    form.classList.toggle('hidden');
+}
+
+function mcpTypeChanged() {
+    var type = document.getElementById('mcp-type').value;
+    var stdio = document.getElementById('mcp-stdio-fields');
+    var http = document.getElementById('mcp-http-fields');
+    if (type === 'stdio') {
+        stdio.classList.remove('hidden');
+        http.classList.add('hidden');
+    } else {
+        stdio.classList.add('hidden');
+        http.classList.remove('hidden');
+    }
+}
+
+async function mcpSubmitAdd() {
+    var type = document.getElementById('mcp-type').value;
+    var name = document.getElementById('mcp-name').value.trim();
+    if (!name) { hubModal('error', 'Error', 'Name is required', function(){}); return; }
+
+    var body = {
+        name: name,
+        type: type,
+        tool_timeout: parseInt(document.getElementById('mcp-timeout').value) || 30
+    };
+
+    if (type === 'stdio') {
+        body.command = document.getElementById('mcp-command').value.trim();
+        var argsStr = document.getElementById('mcp-args').value.trim();
+        body.args = argsStr ? argsStr.split(',').map(function(s){ return s.trim(); }).filter(Boolean) : [];
+    } else {
+        body.url = document.getElementById('mcp-url').value.trim();
+    }
+
+    // Parse env vars
+    var envText = document.getElementById('mcp-env').value.trim();
+    if (envText) {
+        body.env = {};
+        envText.split('\n').forEach(function(line) {
+            var eq = line.indexOf('=');
+            if (eq > 0) body.env[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
+        });
+    }
+
+    try {
+        var resp = await fetch('/skills/mcp/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        var data = await resp.json();
+        if (data.success) {
+            hubModal('check_circle', 'Added!', data.message, function() { window.location.reload(); });
+        } else {
+            hubModal('error', 'Error', data.error, function(){});
+        }
+    } catch (err) {
+        hubModal('error', 'Error', 'Network error: ' + err.message, function(){});
+    }
+}
+
+// MCP server data from backend (for edit modal)
+var MCP_DATA = {{ mcp_servers | tojson }};
+var _mcpEditName = null;
+var _mcpEditIsPreset = false;
+
+// Detect if server matches a preset
+function _mcpIsPreset(srv) {
+    for (var k in MCP_PRESETS) {
+        var p = MCP_PRESETS[k];
+        if (p.name === srv.name && p.command === srv.command) return true;
+    }
+    return false;
+}
+
+function mcpEdit(name) {
+    var srv = MCP_DATA[name];
+    if (!srv) return;
+    _mcpEditName = name;
+    _mcpEditIsPreset = _mcpIsPreset(srv);
+
+    document.getElementById('mcp-edit-title').textContent = name;
+
+    // Badge
+    var badge = document.getElementById('mcp-edit-badge');
+    if (_mcpEditIsPreset) {
+        badge.textContent = 'PRESET';
+        badge.className = 'text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 border border-primary/30 text-primary/40 rounded';
+    } else {
+        badge.textContent = 'CUSTOM';
+        badge.className = 'text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 border border-yellow-400/30 text-yellow-400/60 rounded';
+    }
+
+    // Set field values
+    var typeEl = document.getElementById('mcp-edit-type');
+    typeEl.value = srv.type || 'stdio';
+    typeEl.disabled = _mcpEditIsPreset;
+
+    var cmdEl = document.getElementById('mcp-edit-command');
+    cmdEl.value = srv.command || '';
+    cmdEl.readOnly = _mcpEditIsPreset;
+
+    var argsEl = document.getElementById('mcp-edit-args');
+    argsEl.value = (srv.args || []).join(', ');
+    argsEl.readOnly = _mcpEditIsPreset;
+
+    var urlEl = document.getElementById('mcp-edit-url');
+    urlEl.value = srv.url || '';
+    urlEl.readOnly = _mcpEditIsPreset;
+
+    var envEl = document.getElementById('mcp-edit-env');
+    if (srv.env && Object.keys(srv.env).length > 0) {
+        envEl.value = Object.entries(srv.env).map(function(e) { return e[0] + '=' + e[1]; }).join('\n');
+    } else {
+        envEl.value = '';
+    }
+    envEl.readOnly = _mcpEditIsPreset;
+
+    document.getElementById('mcp-edit-timeout').value = srv.tool_timeout || 30;
+
+    // Style readonly fields
+    var readonlyStyle = 'bg-black/40 border border-primary/20 px-3 py-2 text-primary/50 font-mono text-xs outline-none cursor-default';
+    var editableStyle = 'bg-black/40 border border-primary/40 focus:border-primary px-3 py-2 text-primary font-mono text-xs outline-none transition-all';
+    [cmdEl, argsEl, urlEl, envEl].forEach(function(el) {
+        el.className = _mcpEditIsPreset ? readonlyStyle : editableStyle;
+    });
+    typeEl.className = _mcpEditIsPreset
+        ? readonlyStyle + ' appearance-none'
+        : 'bg-black/40 border border-primary/40 focus:border-primary px-3 py-2 text-primary font-mono text-xs outline-none transition-all appearance-none cursor-pointer';
+
+    mcpEditTypeChanged();
+    document.getElementById('mcp-edit-modal').classList.add('open');
+}
+
+function mcpEditTypeChanged() {
+    var type = document.getElementById('mcp-edit-type').value;
+    var cmdRow = document.getElementById('mcp-edit-cmd-row');
+    var argsRow = document.getElementById('mcp-edit-args-row');
+    var urlRow = document.getElementById('mcp-edit-url-row');
+    if (type === 'stdio') {
+        cmdRow.classList.remove('hidden'); argsRow.classList.remove('hidden');
+        urlRow.classList.add('hidden');
+    } else {
+        cmdRow.classList.add('hidden'); argsRow.classList.add('hidden');
+        urlRow.classList.remove('hidden');
+    }
+}
+
+function mcpEditClose() {
+    document.getElementById('mcp-edit-modal').classList.remove('open');
+    _mcpEditName = null;
+}
+
+async function mcpEditSave() {
+    if (!_mcpEditName) return;
+    var body = { tool_timeout: parseInt(document.getElementById('mcp-edit-timeout').value) || 30 };
+
+    if (!_mcpEditIsPreset) {
+        // Custom: send all fields
+        var type = document.getElementById('mcp-edit-type').value;
+        body.type = type;
+        if (type === 'stdio') {
+            body.command = document.getElementById('mcp-edit-command').value.trim();
+            var argsStr = document.getElementById('mcp-edit-args').value.trim();
+            body.args = argsStr ? argsStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+        } else {
+            body.url = document.getElementById('mcp-edit-url').value.trim();
+        }
+        var envText = document.getElementById('mcp-edit-env').value.trim();
+        body.env = {};
+        if (envText) {
+            envText.split('\n').forEach(function(line) {
+                var eq = line.indexOf('=');
+                if (eq > 0) body.env[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
+            });
+        }
+    }
+
+    try {
+        var resp = await fetch('/skills/mcp/' + _mcpEditName + '/edit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        var data = await resp.json();
+        if (data.success) {
+            mcpEditClose();
+            hubModal('check_circle', 'Updated', data.message, function() { window.location.reload(); });
+        } else {
+            hubModal('error', 'Error', data.error, function(){});
+        }
+    } catch (err) {
+        hubModal('error', 'Error', 'Network error: ' + err.message, function(){});
+    }
+}
+
+function mcpDelete(name) {
+    hubModal('delete', 'Delete MCP Server', 'Remove "' + name + '" from config? Requires gateway restart.', async function() {
+        try {
+            var resp = await fetch('/skills/mcp/' + name + '/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            var data = await resp.json();
+            if (data.success) {
+                hubModal('check_circle', 'Deleted', data.message, function() { window.location.reload(); });
+            } else {
+                hubModal('error', 'Error', data.error, function(){});
+            }
+        } catch (err) {
+            hubModal('error', 'Error', 'Network error: ' + err.message, function(){});
+        }
+    });
+}
+
+function mcpRestartGateway() {
+    hubModal('restart_alt', 'Restart Gateway', 'Restart gateway to apply MCP changes? Bot will be briefly unavailable.', async function() {
+        var btn = document.getElementById('mcp-restart-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>Opening restart screen...';
+        }
+        window.location.href = '/restarting?next=' + encodeURIComponent('/skills#mcp');
+    });
+}
+
+// Poll MCP connection status and update card dots
+async function mcpPollStatus() {
+    try {
+        var resp = await fetch('/skills/mcp/status');
+        if (!resp.ok) return;
+        var data = await resp.json();
+        Object.keys(data).forEach(function(name) {
+            var dot = document.getElementById('mcp-dot-' + name);
+            var toolsSpan = document.getElementById('mcp-tools-' + name);
+            var info = data[name];
+            if (!dot) return;
+
+            if (info.state === 'connected') {
+                dot.className = 'w-2 h-2 rounded-full bg-primary shadow-[0_0_6px_#00FF41] transition-all duration-500';
+                dot.title = info.tool_count + ' tools connected';
+                if (toolsSpan) { toolsSpan.textContent = info.tool_count + ' tools'; toolsSpan.className = 'text-[9px] font-mono text-primary/40'; }
+            } else if (info.state === 'pending' || info.state === 'unknown') {
+                dot.className = 'w-2 h-2 rounded-full bg-yellow-400 shadow-[0_0_6px_#facc15] transition-all duration-500';
+                dot.title = 'Pending — restart gateway to connect';
+                if (toolsSpan) { toolsSpan.textContent = 'restart required'; toolsSpan.className = 'text-[9px] font-mono text-yellow-400/60'; }
+            } else {
+                // failed
+                dot.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] transition-all duration-500';
+                dot.title = 'Failed to connect';
+                if (toolsSpan) { toolsSpan.textContent = 'connection failed'; toolsSpan.className = 'text-[9px] font-mono text-red-400/60'; }
+            }
+            if (toolsSpan) toolsSpan.classList.remove('hidden');
+        });
+    } catch (err) {}
+}
+
+// Toggle skill ON/OFF
+async function toggleSkill(name) {
+    try {
+        const resp = await fetch(`/skills/${name}/toggle`, { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) window.location.reload();
+    } catch (err) {
+        console.error('Toggle failed:', err);
+    }
+}
+
+// Delete workspace skill
+function deleteSkill(name) {
+    hubModal('delete', 'Delete Skill', 'Permanently delete "' + name + '" from workspace? This cannot be undone.', async function() {
+        try {
+            var resp = await fetch('/skills/' + name + '/delete', { method: 'POST' });
+            var data = await resp.json();
+            if (data.success) {
+                window.location.reload();
+            } else {
+                hubModal('error', 'Error', data.error || 'Delete failed', function(){});
+            }
+        } catch (err) {
+            hubModal('error', 'Error', 'Network error: ' + err.message, function(){});
+        }
+    });
+}
+
+// Hub Search
+async function hubSearch() {
+    const q = document.getElementById('hub-query').value.trim();
+    if (!q) return;
+
+    const loading = document.getElementById('hub-loading');
+    const grid = document.getElementById('hub-results-grid');
+    const noResults = document.getElementById('hub-no-results');
+    const errorEl = document.getElementById('hub-error');
+    const placeholder = document.getElementById('hub-placeholder');
+
+    placeholder.classList.add('hidden');
+    loading.classList.remove('hidden');
+    grid.innerHTML = '';
+    noResults.classList.add('hidden');
+    errorEl.classList.add('hidden');
+
+    try {
+        const resp = await fetch(`/skills/hub/search?q=${encodeURIComponent(q)}`);
+        const data = await resp.json();
+        loading.classList.add('hidden');
+
+        if (!data.success) {
+            errorEl.classList.remove('hidden');
+            document.getElementById('hub-error-text').textContent = data.error;
+            return;
+        }
+
+        if (data.results.length === 0) {
+            noResults.classList.remove('hidden');
+            return;
+        }
+
+        grid.innerHTML = data.results.map(r => `
+            <div class="matrix-card p-4 flex flex-col gap-2" id="hub-card-${r.slug}">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-bold uppercase tracking-widest text-primary">${escHtml(r.name)}</span>
+                    <span class="text-[9px] font-mono text-primary/30">${r.score}</span>
+                </div>
+                <div class="text-[10px] font-mono text-primary/40">${escHtml(r.slug)}</div>
+                ${r.summary ? `<p class="text-[10px] text-primary/50 leading-relaxed mt-1">${escHtml(r.summary)}</p>` : ''}
+                <div class="flex gap-2 mt-1">
+                    ${r.installed ? `
+                        <button onclick="hubUninstall('${r.slug}')"
+                            class="flex-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border border-red-400/40 text-red-400 hover:bg-red-400/10 rounded transition-all flex items-center justify-center gap-1.5">
+                            <span class="material-symbols-outlined text-[12px]">delete</span>Uninstall
+                        </button>
+                    ` : `
+                        <button onclick="hubInstall('${r.slug}')"
+                            class="flex-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border border-primary/50 text-primary hover:bg-primary/10 rounded transition-all flex items-center justify-center gap-1.5">
+                            <span class="material-symbols-outlined text-[12px]">download</span>Install
+                        </button>
+                    `}
+                </div>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        loading.classList.add('hidden');
+        errorEl.classList.remove('hidden');
+        document.getElementById('hub-error-text').textContent = 'Network error: ' + err.message;
+    }
+}
+
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// Hub Modal
+let _hubModalCb = null;
+function hubModal(icon, title, body, onConfirm) {
+    document.getElementById('hub-modal-icon').textContent = icon;
+    document.getElementById('hub-modal-title').textContent = title;
+    document.getElementById('hub-modal-body').textContent = body;
+    _hubModalCb = onConfirm;
+    document.getElementById('hub-modal').classList.add('open');
+}
+function hubModalClose() {
+    document.getElementById('hub-modal').classList.remove('open');
+    _hubModalCb = null;
+}
+function hubModalConfirm() {
+    document.getElementById('hub-modal').classList.remove('open');
+    if (_hubModalCb) _hubModalCb();
+    _hubModalCb = null;
+}
+document.getElementById('hub-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('hub-modal')) hubModalClose();
+});
+
+// Install
+async function hubInstall(slug) {
+    hubModal('download', 'Install Skill', `Install "${slug}" from ClawHub to workspace?`, async () => {
+        const card = document.getElementById(`hub-card-${slug}`);
+        const btn = card?.querySelector('button');
+        if (btn) {
+            btn.innerHTML = '<span class="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>Installing...';
+            btn.disabled = true;
+        }
+        try {
+            const resp = await fetch('/skills/hub/install', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[12px]">check</span>Installed!';
+                setTimeout(() => window.location.reload(), 1200);
+            } else {
+                if (btn) { btn.innerHTML = '<span class="material-symbols-outlined text-[12px]">error</span>Failed'; btn.disabled = false; }
+                hubModal('error', 'Error', data.error || 'Install failed', () => {});
+            }
+        } catch (err) {
+            if (btn) { btn.innerHTML = 'Error'; btn.disabled = false; }
+        }
+    });
+}
+
+// Uninstall
+async function hubUninstall(slug) {
+    hubModal('delete', 'Uninstall Skill', `Remove "${slug}" from workspace? This cannot be undone.`, async () => {
+        const card = document.getElementById(`hub-card-${slug}`);
+        const btn = card?.querySelector('button');
+        if (btn) {
+            btn.innerHTML = '<span class="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>Removing...';
+            btn.disabled = true;
+        }
+        try {
+            const resp = await fetch('/skills/hub/uninstall', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[12px]">check</span>Removed!';
+                setTimeout(() => window.location.reload(), 1200);
+            } else {
+                if (btn) { btn.innerHTML = 'Failed'; btn.disabled = false; }
+                hubModal('error', 'Error', data.error || 'Uninstall failed', () => {});
+            }
+        } catch (err) {
+            if (btn) { btn.innerHTML = 'Error'; btn.disabled = false; }
+        }
+    });
+}
+
+// Upload Zip
+async function hubUploadZip(input) {
+    const file = input.files[0];
+    input.value = '';
+    if (!file) return;
+
+    if (!file.name.endsWith('.zip')) {
+        hubModal('error', 'Invalid File', 'Only .zip files are accepted.', function(){});
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        hubModal('error', 'File Too Large', 'Maximum file size is 10MB.', function(){});
+        return;
+    }
+
+    var fileName = file.name;
+    hubModal('upload_file', 'Install from ZIP', 'Upload and install skill from "' + fileName + '"?', async function() {
+        var placeholder = document.getElementById('hub-placeholder');
+        var loading = document.getElementById('hub-loading');
+        if (placeholder) placeholder.classList.add('hidden');
+        if (loading) { loading.classList.remove('hidden'); loading.querySelector('p').textContent = 'Installing ' + fileName + '...'; }
+
+        var formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            var resp = await fetch('/skills/hub/upload', {
+                method: 'POST',
+                body: formData
+            });
+            var data = await resp.json();
+            if (loading) loading.classList.add('hidden');
+
+            if (data.success) {
+                hubModal('check_circle', 'Installed!', data.message || 'Skill installed successfully.', function() { window.location.reload(); });
+            } else {
+                hubModal('error', 'Upload Failed', data.error || 'Unknown error', function(){});
+            }
+        } catch (err) {
+            if (loading) loading.classList.add('hidden');
+            hubModal('error', 'Upload Error', 'Network error: ' + err.message, function(){});
+        }
+    });
+}
+</script>
+{% endblock %}
