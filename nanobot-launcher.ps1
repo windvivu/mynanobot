@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -207,10 +207,7 @@ function Start-Bot {
     $Bot.last_run_at = (Get-Date).ToString("s")
     Save-Registry $Registry
 
-    $command = @(
-        "Set-Location " + (Quote-PowerShell $ScriptRoot),
-        "& " + (Quote-PowerShell $VenvPython) + " -m nanobot.cli.commands gateway --web --config " + (Quote-PowerShell $Bot.config_path)
-    ) -join "; "
+    $command = "& { Set-Location " + (Quote-PowerShell $ScriptRoot) + "; & " + (Quote-PowerShell $VenvPython) + " -m nanobot.cli.commands gateway --web --config " + (Quote-PowerShell $Bot.config_path) + " }"
 
     Start-Process -FilePath $PowerShellExe -WorkingDirectory $ScriptRoot -ArgumentList @(
         "-NoExit",
@@ -350,3 +347,4 @@ try {
     Write-Host ("Error: {0}" -f $_.Exception.Message) -ForegroundColor Red
     exit 1
 }
+
