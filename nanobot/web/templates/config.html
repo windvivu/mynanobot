@@ -1881,7 +1881,7 @@
             result.innerHTML = '<span style="color: #00FF41;">✓ Mặc định sandbox root</span>';
             return;
         }
-        const fullPath = '{{ workspace }}' + '/sandbox/' + subdir;
+        const fullPath = {{ workspace | tojson }} + '/sandbox/' + subdir;
         result.style.display = 'inline';
         result.innerHTML = '<span style="color: #00FF41;">⟳ ...</span>';
         try {

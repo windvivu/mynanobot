@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -14,6 +14,20 @@ function Write-Title {
     Write-Host "=== $Text ===" -ForegroundColor Cyan
 }
 
+function Write-Utf8NoBomFile {
+    param(
+        [string]$Path,
+        [string]$Content
+    )
+
+    $directory = Split-Path -Parent $Path
+    if ($directory -and -not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
 function Ensure-LauncherStorage {
     if (-not (Test-Path -LiteralPath $LauncherRoot)) {
         New-Item -ItemType Directory -Path $LauncherRoot | Out-Null
@@ -54,7 +68,7 @@ function Get-Registry {
 
 function Save-Registry {
     param($Registry)
-    $Registry | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $RegistryPath -Encoding UTF8
+    $Registry | ConvertTo-Json -Depth 8 | ForEach-Object { Write-Utf8NoBomFile -Path $RegistryPath -Content $_ }
 }
 
 function Resolve-WorkspacePath {
@@ -135,6 +149,37 @@ function Ensure-VenvPython {
     }
 }
 
+function Sync-BotRuntimeConfig {
+    param(
+        [string]$ConfigPath,
+        [string]$WorkspacePath,
+        [int]$WebPort
+    )
+
+    if (-not (Test-Path -LiteralPath $ConfigPath)) {
+        throw "Config not found: $ConfigPath"
+    }
+
+    $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+    if (-not $config.gateway) {
+        $config | Add-Member -MemberType NoteProperty -Name gateway -Value ([pscustomobject]@{})
+    }
+    if (-not $config.gateway.web) {
+        $config.gateway | Add-Member -MemberType NoteProperty -Name web -Value ([pscustomobject]@{})
+    }
+    if (-not $config.agents) {
+        $config | Add-Member -MemberType NoteProperty -Name agents -Value ([pscustomobject]@{})
+    }
+    if (-not $config.agents.defaults) {
+        $config.agents | Add-Member -MemberType NoteProperty -Name defaults -Value ([pscustomobject]@{})
+    }
+
+    $config.gateway.web.enabled = $true
+    $config.gateway.web.port = $WebPort
+    $config.agents.defaults.workspace = $WorkspacePath
+
+    $config | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Utf8NoBomFile -Path $ConfigPath -Content $_ }
+}
 function Initialize-BotConfig {
     param(
         [string]$ConfigPath,
@@ -167,7 +212,7 @@ function Initialize-BotConfig {
     $config.gateway.web.port = $WebPort
     $config.agents.defaults.workspace = $WorkspacePath
 
-    $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $ConfigPath -Encoding UTF8
+    $config | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Utf8NoBomFile -Path $ConfigPath -Content $_ }
 }
 
 function Select-Bot {
@@ -204,10 +249,11 @@ function Start-Bot {
 
     Ensure-VenvPython
 
+    Sync-BotRuntimeConfig -ConfigPath $Bot.config_path -WorkspacePath $Bot.workspace -WebPort ([int]$Bot.web_port)
     $Bot.last_run_at = (Get-Date).ToString("s")
     Save-Registry $Registry
 
-    $command = "& { Set-Location " + (Quote-PowerShell $ScriptRoot) + "; & " + (Quote-PowerShell $VenvPython) + " -m nanobot.cli.commands gateway --web --config " + (Quote-PowerShell $Bot.config_path) + " }"
+    $command = "& { Set-Location " + (Quote-PowerShell $ScriptRoot) + "; & " + (Quote-PowerShell $VenvPython) + " -m nanobot.cli.commands gateway --web --config " + (Quote-PowerShell $Bot.config_path) + " --workspace " + (Quote-PowerShell $Bot.workspace) + " }"
 
     Start-Process -FilePath $PowerShellExe -WorkingDirectory $ScriptRoot -ArgumentList @(
         "-NoExit",
@@ -347,4 +393,6 @@ try {
     Write-Host ("Error: {0}" -f $_.Exception.Message) -ForegroundColor Red
     exit 1
 }
+
+
 
