@@ -7,8 +7,9 @@ import json
 import shutil
 import sys
 import time
+import uuid
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from loguru import logger
 from pydantic import Field
@@ -57,7 +58,6 @@ class ZaloPersonalConfig(Base):
     enabled: bool = False
     allow_from: list[str] = Field(default_factory=lambda: ["*"])  # Zalo user IDs (* = all, behind QR auth)
     node_path: str = "node"  # Path to Node.js binary
-    group_reply_mode: Literal["mention", "ambient", "open"] = "ambient"
 
 
 class ZaloPersonalChannel(BaseChannel):
@@ -97,10 +97,17 @@ class ZaloPersonalChannel(BaseChannel):
         self._reconnect_attempts: int = 0
         self._max_reconnect_attempts: int = 5
         self._intentional_disconnect: bool = False  # set True when user explicitly disconnects
+        self._pending_commands: dict[str, asyncio.Future[dict[str, Any]]] = {}
         # Rate limit: track send timestamps per chat_id to prevent runaway loops
         self._send_timestamps: dict[str, list[float]] = {}
         self._max_sends_per_window: int = 5     # max messages per chat per window (raised from 3 to support multi-message splits)
         self._send_window_seconds: float = 10.0 # sliding window size (reduced from 30s to reset faster between turns)
+        # Registry: remember thread_type per chat_id from inbound messages.
+        # Used as fallback when outbound metadata lacks thread_type (e.g. cross-chat message tool).
+        self._known_thread_types: dict[str, str] = {}
+        # Tracks which chat_ids have already received the one-per-turn processing hint.
+        # Cleared when a real (non-progress) message is sent to that chat.
+        self._hint_sent: set[str] = set()
 
     # ── BaseChannel interface ─────────────────────────────
 
@@ -135,8 +142,24 @@ class ZaloPersonalChannel(BaseChannel):
             logger.warning("Zalo bridge not running, cannot send")
             return
 
-        # Skip progress messages — Zalo doesn't support them well
+        # Progress messages: send one "processing" hint per chat per turn, drop the rest
         if msg.metadata.get("_progress", False):
+            if msg.metadata.get("_tool_hint") and msg.chat_id not in self._hint_sent:
+                self._hint_sent.add(msg.chat_id)
+                hint_thread_type = (
+                    msg.metadata.get("thread_type")
+                    or self._known_thread_types.get(msg.chat_id, "User")
+                )
+                try:
+                    await self._send_command({
+                        "action": "send",
+                        "threadId": msg.chat_id,
+                        "threadType": hint_thread_type,
+                        "content": "⏳ Đang xử lý, xin đợi...",
+                    }, wait_for_ack=True)
+                    logger.debug("[Zalo] Sent processing hint to {}", msg.chat_id)
+                except Exception as e:
+                    logger.debug("[Zalo] Failed to send processing hint: {}", e)
             return
 
         if not msg.content or msg.content == "[empty message]":
@@ -163,10 +186,14 @@ class ZaloPersonalChannel(BaseChannel):
                 "Zalo rate limit: {} msgs to {} in {}s — dropping message",
                 len(timestamps), chat_id, self._send_window_seconds,
             )
-            return
+            raise RuntimeError(
+                f"Zalo rate limit: {len(timestamps)} messages in {self._send_window_seconds}s for {chat_id}"
+            )
         timestamps.append(now)
 
-        thread_type = msg.metadata.get("thread_type", "User")
+        thread_type = msg.metadata.get("thread_type") or self._known_thread_types.get(chat_id, "User")
+        if not msg.metadata.get("thread_type") and thread_type != "User":
+            logger.debug("[Zalo] thread_type resolved from registry for {}: {}", chat_id, thread_type)
 
         # Send text message (if any)
         if msg.content and msg.content not in ("", "[empty message]"):
@@ -175,7 +202,7 @@ class ZaloPersonalChannel(BaseChannel):
                 "threadId": msg.chat_id,
                 "threadType": thread_type,
                 "content": msg.content,
-            })
+            }, wait_for_ack=True)
 
         # ── Send media files if any ──
         if msg.media:
@@ -189,10 +216,14 @@ class ZaloPersonalChannel(BaseChannel):
                         "content":    "",
                         "filePath":   str(Path(media_path).resolve()),
                         "mediaType":  media_type,
-                    })
+                    }, wait_for_ack=True)
                     logger.info("[Zalo] Queued media send: {} ({})", Path(media_path).name, media_type)
                 except Exception as e:
                     logger.warning("[Zalo] Failed to queue media {}: {}", media_path, e)
+                    raise
+
+        # Real message sent — reset hint tracker so next turn can send a new hint
+        self._hint_sent.discard(chat_id)
 
     @staticmethod
     def _detect_media_type(path: str) -> str:
@@ -299,6 +330,10 @@ class ZaloPersonalChannel(BaseChannel):
         self._ready_event.clear()
         self._user_id = ""
         self._user_name = ""
+        for future in self._pending_commands.values():
+            if not future.done():
+                future.set_exception(RuntimeError("Zalo bridge disconnected before delivery ack"))
+        self._pending_commands.clear()
 
         logger.info("Zalo disconnected")
         return {"status": "disconnected"}
@@ -401,16 +436,30 @@ class ZaloPersonalChannel(BaseChannel):
                 raise RuntimeError(f"npm install failed: {err_msg}")
             logger.info("Zalo bridge dependencies installed successfully")
 
-    async def _send_command(self, cmd: dict) -> None:
+    async def _send_command(self, cmd: dict, *, wait_for_ack: bool = False, timeout_s: float = 20.0) -> dict[str, Any] | None:
         """Send a JSON command to the bridge via stdin."""
         if not self._process or not self._process.stdin:
-            return
+            raise RuntimeError("Zalo bridge is not running")
+        future: asyncio.Future[dict[str, Any]] | None = None
+        cmd_id: str | None = None
         try:
+            if wait_for_ack:
+                cmd_id = uuid.uuid4().hex
+                cmd = {**cmd, "cmdId": cmd_id}
+                future = asyncio.get_running_loop().create_future()
+                self._pending_commands[cmd_id] = future
             line = json.dumps(cmd, ensure_ascii=False) + "\n"
             self._process.stdin.write(line.encode("utf-8"))
             await self._process.stdin.drain()
+            if future is not None:
+                return await asyncio.wait_for(future, timeout=timeout_s)
+            return None
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
             logger.warning("Failed to send command to Zalo bridge: {}", e)
+            raise RuntimeError(f"Failed to send command to Zalo bridge: {e}") from e
+        finally:
+            if cmd_id and future is not None:
+                self._pending_commands.pop(cmd_id, None)
 
     async def _read_bridge_output(self) -> None:
         """Read JSON lines from bridge stdout and dispatch events."""
@@ -534,20 +583,6 @@ class ZaloPersonalChannel(BaseChannel):
                     content, self._user_id, self._user_name,
                     mentioned_ids, quoted_sender_id,
                 )
-                if not mentioned and self.config.group_reply_mode == "mention":
-                    logger.debug(
-                        "[Zalo] Group message from {} ignored by group_reply_mode=mention",
-                        sender_name or sender_id,
-                    )
-                    return
-                if not mentioned and self.config.group_reply_mode == "open":
-                    # Explicit branch for readability: open mode intentionally treats
-                    # unmentioned group messages like normal messages.
-                    logger.debug(
-                        "[Zalo] Group message from {} - OPEN mode, responding",
-                        sender_name or sender_id,
-                    )
-                    mentioned = True
                 if mentioned:
                     # Strip @mention from content before forwarding to agent
                     content = _strip_mention(content, self._user_name)
@@ -588,6 +623,9 @@ class ZaloPersonalChannel(BaseChannel):
                 )
                 deliver_content = ambient_note
 
+            # Record thread_type so outbound can resolve it for cross-chat sends
+            self._known_thread_types[thread_id] = thread_type
+
             await self._handle_message(
                 sender_id=sender_id,
                 chat_id=thread_id,
@@ -620,6 +658,18 @@ class ZaloPersonalChannel(BaseChannel):
         elif event_type == "error":
             message = event.get("message", "unknown error")
             logger.error("Zalo bridge error: {}", message)
+
+        elif event_type in {"sent", "send_error"}:
+            cmd_id = event.get("cmdId")
+            if not cmd_id:
+                return
+            future = self._pending_commands.get(cmd_id)
+            if not future or future.done():
+                return
+            if event_type == "sent":
+                future.set_result(event)
+            else:
+                future.set_exception(RuntimeError(event.get("message", "Unknown Zalo send error")))
 
         else:
             logger.debug("Unknown Zalo bridge event: {}", event_type)

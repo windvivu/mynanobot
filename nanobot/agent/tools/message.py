@@ -40,14 +40,22 @@ class MessageTool(Tool):
         self._default_channel = default_channel
         self._default_chat_id = default_chat_id
         self._default_message_id = default_message_id
+        self._default_metadata: dict[str, Any] = {}
         self._sent_in_turn: bool = False
         self._working_dir = Path(working_dir) if working_dir else None
 
-    def set_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+    def set_context(
+        self,
+        channel: str,
+        chat_id: str,
+        message_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """Set the current message context."""
         self._default_channel = channel
         self._default_chat_id = chat_id
         self._default_message_id = message_id
+        self._default_metadata = dict(metadata or {})
 
     def set_send_callback(self, callback: Callable[[OutboundMessage], Awaitable[None]]) -> None:
         """Set the callback for sending messages."""
@@ -104,6 +112,13 @@ class MessageTool(Tool):
 
         resolved_media = self._resolve_media_paths(media or [])
         metadata = self._build_metadata(message_id, kwargs)
+        if channel == self._default_channel and chat_id == self._default_chat_id:
+            inherited = {
+                key: value
+                for key, value in self._default_metadata.items()
+                if key in {"thread_type"}
+            }
+            metadata = {**inherited, **metadata}
         msg = OutboundMessage(
             channel=channel,
             chat_id=chat_id,
@@ -139,6 +154,7 @@ class MessageTool(Tool):
         metadata: dict[str, Any] = {}
         if message_id:
             metadata["message_id"] = message_id
+        metadata["_tool_driven"] = True
 
         record_delivery = extras.get("record_channel_delivery")
         if isinstance(record_delivery, bool):

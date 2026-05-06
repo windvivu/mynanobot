@@ -42,7 +42,15 @@ from nanobot.utils.helpers import image_placeholder_text, truncate_text
 from nanobot.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
-    from nanobot.config.schema import ChannelsConfig, ExecToolConfig, WebSearchConfig, WebToolsConfig
+    from nanobot.config.schema import (
+        ChannelsConfig,
+        ExecToolConfig,
+        MarketScannerConfig,
+        ScannerLabConfig,
+        TradingViewConfig,
+        WebSearchConfig,
+        WebToolsConfig,
+    )
     from nanobot.cron.service import CronService
 
 
@@ -61,6 +69,7 @@ class _LoopHook(AgentHook):
         channel: str = "cli",
         chat_id: str = "direct",
         message_id: str | None = None,
+        message_metadata: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(reraise=True)
         self._loop = agent_loop
@@ -70,6 +79,7 @@ class _LoopHook(AgentHook):
         self._channel = channel
         self._chat_id = chat_id
         self._message_id = message_id
+        self._message_metadata = dict(message_metadata or {})
         self._stream_buf = ""
 
     def wants_streaming(self) -> bool:
@@ -105,7 +115,12 @@ class _LoopHook(AgentHook):
         for tc in context.tool_calls:
             args_str = json.dumps(tc.arguments, ensure_ascii=False)
             logger.info("Tool call: {}({})", tc.name, args_str[:200])
-        self._loop._set_tool_context(self._channel, self._chat_id, self._message_id)
+        self._loop._set_tool_context(
+            self._channel,
+            self._chat_id,
+            self._message_id,
+            self._message_metadata,
+        )
 
     async def after_iteration(self, context: AgentHookContext) -> None:
         u = context.usage or {}
@@ -196,6 +211,9 @@ class AgentLoop:
         enable_spawn: bool = True,
         enable_cron: bool = True,
         enable_mcp: bool = True,
+        tradingview_config: "TradingViewConfig | None" = None,
+        market_scanner_config: "MarketScannerConfig | None" = None,
+        scanner_lab_config: "ScannerLabConfig | None" = None,
         disabled_skills: list[str] | None = None,
         timezone: str = "UTC",
         chatbot_config: Any | None = None,
@@ -240,6 +258,9 @@ class AgentLoop:
         self.enable_spawn = enable_spawn
         self.enable_cron = enable_cron
         self.enable_mcp = enable_mcp
+        self.tradingview_config = tradingview_config
+        self.market_scanner_config = market_scanner_config
+        self.scanner_lab_config = scanner_lab_config
         self._chatbot_config = chatbot_config
         self._extra_hooks: list[AgentHook] = hooks or []
         self._unified_session = unified_session
@@ -293,6 +314,7 @@ class AgentLoop:
         # Dream: instantiated and configured from dream_config
         from nanobot.config.schema import DreamConfig
         _dream_cfg: DreamConfig = dream_config if isinstance(dream_config, DreamConfig) else DreamConfig()
+        self.dream_config = _dream_cfg
         _dream_model = _dream_cfg.model_override or self.model
         self.dream = Dream(
             store=self._memory_store,
@@ -401,6 +423,31 @@ class AgentLoop:
         if self.tool_preset != "chatbot":
             self.tools.register(MyTool(loop=self, modify_allowed=False))
 
+        if self.tradingview_config and self.tradingview_config.enabled:
+            from nanobot.agent.tools.tradingview import TradingViewTool
+            self.tools.register(TradingViewTool(self.tradingview_config))
+
+        scanner_lab_replaces_market_scanner = bool(
+            self.scanner_lab_config
+            and self.scanner_lab_config.enabled
+            and getattr(self.scanner_lab_config, "replace_market_scanner", False)
+        )
+
+        if (
+            self.market_scanner_config
+            and self.market_scanner_config.enabled
+            and not scanner_lab_replaces_market_scanner
+        ):
+            from nanobot.agent.tools.market_scanner import MarketScannerTool
+            self.tools.register(MarketScannerTool(
+                self.market_scanner_config,
+                tradingview_config=self.tradingview_config,
+            ))
+
+        if self.scanner_lab_config and self.scanner_lab_config.enabled:
+            from nanobot.agent.tools.scanner_lab import ScannerLabTool
+            self.tools.register(ScannerLabTool(self.scanner_lab_config))
+
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
         if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
@@ -427,12 +474,21 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
-    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+    def _set_tool_context(
+        self,
+        channel: str,
+        chat_id: str,
+        message_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """Update context for all tools that need routing info."""
         for name in ("message", "spawn", "cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
+                    if name == "message":
+                        tool.set_context(channel, chat_id, message_id, metadata)
+                    else:
+                        tool.set_context(channel, chat_id)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -441,21 +497,6 @@ class AgentLoop:
             return None
         from nanobot.utils.helpers import strip_think
         return strip_think(text) or None
-
-    def _with_effective_session_key(self, msg: InboundMessage) -> InboundMessage:
-        """Apply unified-session routing while preserving explicit thread overrides."""
-        if not self._unified_session or msg.session_key_override or msg.channel == "system":
-            return msg
-        return InboundMessage(
-            channel=msg.channel,
-            sender_id=msg.sender_id,
-            chat_id=msg.chat_id,
-            content=msg.content,
-            timestamp=msg.timestamp,
-            media=msg.media,
-            metadata=msg.metadata,
-            session_key_override=UNIFIED_SESSION_KEY,
-        )
 
     # ── Custom: dynamic config reload (web dashboard support) ──
     def _reload_config(self) -> None:
@@ -527,7 +568,10 @@ class AgentLoop:
                 or tc.enable_mcp != self.enable_mcp
                 or tc.sandbox_mode != self.sandbox_mode
             )
-            if preset_changed:
+            tradingview_changed = config.tradingview != getattr(self, "tradingview_config", None)
+            market_scanner_changed = config.market_scanner != getattr(self, "market_scanner_config", None)
+            scanner_lab_changed = config.scanner_lab != getattr(self, "scanner_lab_config", None)
+            if preset_changed or tradingview_changed or market_scanner_changed or scanner_lab_changed:
                 old_preset = self.tool_preset
                 self.tool_preset = tc.tool_preset
                 self.enable_file_tools = tc.enable_file_tools
@@ -536,9 +580,19 @@ class AgentLoop:
                 self.enable_cron = tc.enable_cron
                 self.enable_mcp = tc.enable_mcp
                 self.sandbox_mode = tc.sandbox_mode
+                self.tradingview_config = config.tradingview
+                self.market_scanner_config = config.market_scanner
+                self.scanner_lab_config = config.scanner_lab
                 self.tools = ToolRegistry()
                 self._register_default_tools()
-                logger.info("[Agent] Tool preset reloaded: '{}' -> '{}'", old_preset, tc.tool_preset)
+                logger.info(
+                    "[Agent] Tools reloaded: preset '{}' -> '{}' (tradingview_changed={}, market_scanner_changed={}, scanner_lab_changed={})",
+                    old_preset,
+                    tc.tool_preset,
+                    tradingview_changed,
+                    market_scanner_changed,
+                    scanner_lab_changed,
+                )
         except Exception as e:
             logger.info("[Agent] Config reload ERROR: {}", e)
 
@@ -553,7 +607,8 @@ class AgentLoop:
         channel: str = "cli",
         chat_id: str = "direct",
         message_id: str | None = None,
-    ) -> tuple[str | None, list[str], list[dict]]:
+        message_metadata: dict[str, Any] | None = None,
+    ) -> tuple[str | None, list[str], list[dict], str, list[dict[str, str]]]:
         """Run the agent iteration loop via AgentRunner + _LoopHook.
 
         *on_stream*: called with each content delta during streaming.
@@ -572,6 +627,7 @@ class AgentLoop:
             channel=channel,
             chat_id=chat_id,
             message_id=message_id,
+            message_metadata=message_metadata,
         )
         hook: AgentHook = (
             _LoopHookChain(loop_hook, self._extra_hooks)
@@ -611,7 +667,7 @@ class AgentLoop:
         elif result.stop_reason == "error":
             logger.error("LLM returned error: {}", (result.final_content or "")[:200])
 
-        return result.final_content, result.tools_used, result.messages, result.stop_reason
+        return result.final_content, result.tools_used, result.messages, result.stop_reason, result.tool_events
 
     # ── Message debouncing for channel messages ──
     _DEBOUNCE_SKIP_CHANNELS = frozenset({"webchat", "cli"})
@@ -677,8 +733,8 @@ class AgentLoop:
                 except asyncio.TimeoutError:
                     break
 
-                next_raw = next_msg.content.strip()
                 next_msg = self._with_effective_session_key(next_msg)
+                next_raw = next_msg.content.strip()
                 # Priority commands (e.g. /stop, /restart): execute immediately, don't batch
                 if self.commands.is_priority(next_raw):
                     next_ctx = CommandContext(
@@ -731,6 +787,21 @@ class AgentLoop:
                 if t in self._active_tasks.get(k, [])
                 else None
             )
+        )
+
+    def _with_effective_session_key(self, msg: InboundMessage) -> InboundMessage:
+        """Apply unified-session routing while preserving explicit thread overrides."""
+        if not self._unified_session or msg.session_key_override or msg.channel == "system":
+            return msg
+        return InboundMessage(
+            channel=msg.channel,
+            sender_id=msg.sender_id,
+            chat_id=msg.chat_id,
+            content=msg.content,
+            timestamp=msg.timestamp,
+            media=msg.media,
+            metadata=msg.metadata,
+            session_key_override=UNIFIED_SESSION_KEY,
         )
 
     async def _run_dream_loop(self) -> None:
@@ -953,7 +1024,7 @@ class AgentLoop:
                 self.sessions.save(session)
             session, _compact_summary = self.auto_compact.prepare_session(session, key)
             await self.memory_consolidator.maybe_consolidate_by_tokens(session)
-            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"), msg.metadata)
             history = session.get_history(max_messages=0)
             # Subagent results should be assistant role, other system messages use user role
             current_role = "assistant" if msg.sender_id == "subagent" else "user"
@@ -966,10 +1037,11 @@ class AgentLoop:
                 session_summary=_compact_summary,
                 current_role=current_role,
             )
-            final_content, _, all_msgs = await self._run_agent_loop(
+            final_content, _, all_msgs, _, _ = await self._run_agent_loop(
                 messages,
                 session=session, channel=channel, chat_id=chat_id,
                 message_id=msg.metadata.get("message_id"),
+                message_metadata=msg.metadata,
             )
             self._save_turn(session, all_msgs, 1 + len(history))
             self._clear_runtime_checkpoint(session)
@@ -996,7 +1068,7 @@ class AgentLoop:
 
         await self.memory_consolidator.maybe_consolidate_by_tokens(session)
 
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
+        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"), msg.metadata)
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
@@ -1021,7 +1093,7 @@ class AgentLoop:
                 channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
             ))
 
-        final_content, tools_used, all_msgs, stop_reason = await self._run_agent_loop(
+        final_content, tools_used, all_msgs, stop_reason, tool_events = await self._run_agent_loop(
             initial_messages,
             on_progress=on_progress or _bus_progress,
             on_stream=on_stream,
@@ -1030,6 +1102,7 @@ class AgentLoop:
             channel=msg.channel,
             chat_id=msg.chat_id,
             message_id=msg.metadata.get("message_id"),
+            message_metadata=msg.metadata,
         )
 
         if not final_content or not final_content.strip():
@@ -1046,18 +1119,28 @@ class AgentLoop:
 
         # Custom: bypass _sent_in_turn suppression for direct_return callers (fleet, cron)
         if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn and not direct_return:
+            logger.warning(
+                "[Loop] Final response suppressed - message tool already sent in same turn: channel={} chat_id={}",
+                msg.channel,
+                msg.chat_id,
+            )
             return None
 
         # Delegate multi-message splitting and typing delay to DeliveryPolicy
         from nanobot.agent.delivery import ResponseDeliveryPolicy
         policy = ResponseDeliveryPolicy(chatbot_config=self._chatbot_config, bus=self.bus)
         
+        delivery_metadata = {
+            **(msg.metadata or {}),
+            "_tools_used": tools_used,
+            "_tool_events": tool_events,
+        }
         return await policy.deliver(
             final_content=final_content,
             channel=msg.channel,
             chat_id=msg.chat_id,
             sender_id=msg.sender_id,
-            metadata=msg.metadata or {},
+            metadata=delivery_metadata,
             on_stream=on_stream,
             on_multi_send=on_multi_send,
             direct_return=direct_return,
